@@ -10,12 +10,14 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-// Variables used for command line parameters
+// Global variables
 var (
-	token string
-	newRole string
-	onboardingRole string
-	memberRole string
+	token                string
+	newRole              string
+	onboardingRole       string
+	memberRole           string
+	onboardingInviteCode string
+	inviteCount          = make(map[string]int, 0)
 )
 
 func init() {
@@ -23,6 +25,7 @@ func init() {
 	newRole = os.Getenv("NEW_ROLE")
 	onboardingRole = os.Getenv("ONBOARDING_ROLE")
 	memberRole = os.Getenv("MEMBER_ROLE")
+	onboardingInviteCode = os.Getenv("ONBOARDING_INVITE_CODE")
 }
 
 func main() {
@@ -37,6 +40,7 @@ func main() {
 	// Register the messageCreate func as a callback for MessageCreate events.
 	dg.AddHandler(messageCreate)
 	dg.AddHandler(userJoin)
+	dg.AddHandler(joinGuild)
 
 	// Open a websocket connection to Discord and begin listening.
 	err = dg.Open()
@@ -57,13 +61,44 @@ func main() {
 	}
 }
 
+func joinGuild(s *discordgo.Session, r *discordgo.Ready) {
+	for _, guild := range r.Guilds {
+		invites, err := s.GuildInvites(guild.ID)
+		if err != nil {
+			fmt.Println("error fetching guild invites, ", err)
+			return
+		}
+		for _, invite := range invites {
+			if invite.Code == onboardingInviteCode {
+				inviteCount[guild.ID] = invite.Uses
+			}
+		}
+	}
+}
+
 func userJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
-	user := *g.User
-	err := s.GuildMemberRoleAdd(g.GuildID, user.ID, "575139365123129354")
-	fmt.Println("New user: ", user)
+	user := g.User
+	guildID := g.GuildID
+	invites, err := s.GuildInvites(guildID)
 	if err != nil {
-		fmt.Println(err)
+		fmt.Println("error fetching guild invites, ", err)
 		return
+	}
+	for _, invite := range invites {
+		if invite.Code == onboardingInviteCode {
+			if inviteCount[guildID] == invite.Uses {
+				if err := s.GuildMemberRoleAdd(guildID, user.ID, newRole); err != nil {
+					fmt.Println("error adding role, ", err)
+					return
+				}
+			} else {
+				inviteCount[guildID] = invite.Uses
+				if err := s.GuildMemberRoleAdd(guildID, user.ID, onboardingRole); err != nil {
+					fmt.Println("error adding role, ", err)
+					return
+				}
+			}
+		}
 	}
 }
 
@@ -77,6 +112,9 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 
 	if strings.HasPrefix(m.Content, "!") {
+		if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
+			fmt.Println("error deleting command message, ", err)
+		}
 		handleCommand(s, m)
 	}
 }
@@ -90,37 +128,80 @@ func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	//}
 	switch commandName {
 	case "onboardall":
-		onboardAll(s, m)
+		onboard(s, m, newRole)
+	case "onboard":
+		onboard(s, m, onboardingRole)
 	default:
-		fmt.Println("Unrecognized command: ", commandName)
+		fmt.Println("unrecognized command, ", commandName)
 	}
 }
 
-func onboardAll(s *discordgo.Session, m *discordgo.MessageCreate) {
+func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 	guildID := m.GuildID
 	guild, err := s.Guild(guildID)
 	if err != nil {
 		fmt.Println("error fetching guild, ", err)
+		return
 	}
 	member, err := s.GuildMember(guildID, m.Author.ID)
 	if err != nil {
 		fmt.Println("error fetching message author, ", err)
+		return
 	}
 	if member != nil {
 		if contains(member.Roles, memberRole) {
-			if err != nil {
-				fmt.Println("error fetching guild members, ", err)
-			}
+			onboardedUsers := make([]*discordgo.User, 0)
 			for _, member := range guild.Members {
-				if contains(member.Roles, memberRole) {
-					fmt.Println(member.Nick)
-					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, newRole); err != nil {
-						fmt.Println("Error removing new role, ", err)
+				if contains(member.Roles, r) {
+					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, r); err != nil {
+						fmt.Println("error removing role, ", err)
+						return
 					}
 					if err = s.GuildMemberRoleAdd(guildID, member.User.ID, memberRole); err != nil {
-						fmt.Println("Error adding member role, ", err)
+						fmt.Println("error adding member role, ", err)
+						return
+					}
+					onboardedUsers = append(onboardedUsers, member.User)
+				}
+			}
+			var confirmMessage *discordgo.Message
+			numberOnboarded := len(onboardedUsers)
+			if numberOnboarded > 0 {
+				confirmMessageContent := "Successfully onboarded "
+				for i, user := range onboardedUsers {
+					if numberOnboarded > 2 {
+						if i == numberOnboarded - 1 {
+							confirmMessageContent += "and <@!" + user.ID + ">"
+						} else {
+							confirmMessageContent += "<@!" + user.ID + ">, "
+						}
+					} else if numberOnboarded > 1 {
+						if i == numberOnboarded - 1 {
+							confirmMessageContent += " and <@!" + user.ID + ">"
+						} else {
+							confirmMessageContent += "<@!" + user.ID + ">"
+						}
+					} else {
+						confirmMessageContent += "<@!" + user.ID + ">"
 					}
 				}
+				confirmMessage = &discordgo.Message {
+					Content:      confirmMessageContent,
+					ChannelID:    m.ChannelID,
+				}
+			} else {
+				confirmMessage = &discordgo.Message {
+					Content:      "No users to onboard",
+					ChannelID:    m.ChannelID,
+				}
+			}
+			if _, err = s.ChannelMessageSend(m.ChannelID, confirmMessage.Content); err != nil {
+				fmt.Println("error sending onboarding confirmation message, ", err)
+			}
+		} else {
+			if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+				fmt.Println("error sending permissions message, ", err)
+				return
 			}
 		}
 	}
