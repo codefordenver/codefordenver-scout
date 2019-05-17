@@ -90,13 +90,15 @@ func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	//}
 	switch commandName {
 	case "onboardall":
-		onboardAll(s, m)
+		onboard(s, m, newRole)
+	case "onboard":
+		onboard(s, m, onboardingRole)
 	default:
 		fmt.Println("Unrecognized command: ", commandName)
 	}
 }
 
-func onboardAll(s *discordgo.Session, m *discordgo.MessageCreate) {
+func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 	guildID := m.GuildID
 	guild, err := s.Guild(guildID)
 	if err != nil {
@@ -112,15 +114,18 @@ func onboardAll(s *discordgo.Session, m *discordgo.MessageCreate) {
 				fmt.Println("error fetching guild members, ", err)
 			}
 			for _, member := range guild.Members {
-				if contains(member.Roles, memberRole) {
-					fmt.Println(member.Nick)
-					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, newRole); err != nil {
-						fmt.Println("Error removing new role, ", err)
+				if contains(member.Roles, r) {
+					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, r); err != nil {
+						fmt.Println("error removing role, ", err)
 					}
 					if err = s.GuildMemberRoleAdd(guildID, member.User.ID, memberRole); err != nil {
-						fmt.Println("Error adding member role, ", err)
+						fmt.Println("error adding member role, ", err)
 					}
 				}
+			}
+		} else {
+			if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+				fmt.Println("error sending message, ", err)
 			}
 		}
 	}
