@@ -5,7 +5,8 @@ General Usage:
 ![command name] [arguments]
 ```
 Commands:
-- `!onboardall` - Converts all users with "new" role to "member" role
+- `!onboardall` - Converts all users with new role to member role
+- `!onboard` - Converts all users with onboarding role to member role
 ## Development
 ### Setup
 Install:
