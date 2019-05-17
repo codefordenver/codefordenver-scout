@@ -1,4 +1,5 @@
 #Scout Bot
+
 ##Commands
 General Usage:
 ```
@@ -7,6 +8,7 @@ General Usage:
 Commands:
 - `!onboardall` - Converts all users with "new" role to "member" role
 ##Development
+
 ###Setup
 Install:
 - [Golang](https://golang.org/)
