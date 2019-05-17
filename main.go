@@ -150,10 +150,6 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 	}
 	if member != nil {
 		if contains(member.Roles, memberRole) {
-			if err != nil {
-				fmt.Println("error fetching guild members, ", err)
-				return
-			}
 			for _, member := range guild.Members {
 				if contains(member.Roles, r) {
 					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, r); err != nil {
