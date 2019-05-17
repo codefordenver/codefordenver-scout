@@ -1,15 +1,17 @@
-#Scout Bot
-
-##Commands
+#
+Scout Bot
+##
+Commands
 General Usage:
 ```
 ![command name] [arguments]
 ```
 Commands:
 - `!onboardall` - Converts all users with "new" role to "member" role
-##Development
-
-###Setup
+##
+Development
+###
+Setup
 Install:
 - [Golang](https://golang.org/)
 - [go-watcher](https://github.com/canthefason/go-watcher)
