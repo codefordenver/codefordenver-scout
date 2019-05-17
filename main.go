@@ -17,6 +17,7 @@ var (
 	onboardingRole       string
 	memberRole           string
 	onboardingInviteCode string
+	codeOfConductMessageID string
 	inviteCount          = make(map[string]int, 0)
 )
 
@@ -26,36 +27,33 @@ func init() {
 	onboardingRole = os.Getenv("ONBOARDING_ROLE")
 	memberRole = os.Getenv("MEMBER_ROLE")
 	onboardingInviteCode = os.Getenv("ONBOARDING_INVITE_CODE")
+	codeOfConductMessageID = os.Getenv("CODE_OF_CONDUCT_MESSAGE_ID")
 }
 
 func main() {
 
-	// Create a new Discord session using the provided bot token.
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session, ", err)
 		return
 	}
 
-	// Register the messageCreate func as a callback for MessageCreate events.
 	dg.AddHandler(messageCreate)
 	dg.AddHandler(userJoin)
 	dg.AddHandler(joinGuild)
+	dg.AddHandler(userReact)
 
-	// Open a websocket connection to Discord and begin listening.
 	err = dg.Open()
 	if err != nil {
 		fmt.Println("error opening connection, ", err)
 		return
 	}
 
-	// Wait here until CTRL-C or other term signal is received.
 	fmt.Println("Bot is now running.  Press CTRL-C to exit.")
 	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
-	// Cleanly close down the Discord session.
 	if err = dg.Close(); err != nil {
 		fmt.Println("error closing Discord session, ", err)
 	}
@@ -71,6 +69,7 @@ func joinGuild(s *discordgo.Session, r *discordgo.Ready) {
 		for _, invite := range invites {
 			if invite.Code == onboardingInviteCode {
 				inviteCount[guild.ID] = invite.Uses
+				break
 			}
 		}
 	}
@@ -86,31 +85,30 @@ func userJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 	}
 	for _, invite := range invites {
 		if invite.Code == onboardingInviteCode {
-			if inviteCount[guildID] == invite.Uses {
-				if err := s.GuildMemberRoleAdd(guildID, user.ID, newRole); err != nil {
-					fmt.Println("error adding role, ", err)
-					return
-				}
-			} else {
+			if inviteCount[guildID] != invite.Uses {
 				inviteCount[guildID] = invite.Uses
 				if err := s.GuildMemberRoleAdd(guildID, user.ID, onboardingRole); err != nil {
 					fmt.Println("error adding role, ", err)
 					return
 				}
+				return
 			}
 		}
 	}
 }
 
-// This function will be called (due to AddHandler above) every time a new
-// message is created on any channel that the autenticated bot has access to.
+func userReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+	if m.MessageID == codeOfConductMessageID {
+		if err := s.GuildMemberRoleAdd(m.GuildID, m.UserID, newRole); err != nil {
+			fmt.Println("error adding role, ", err)
+		}
+	}
+}
+
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	// Ignore all messages created by the bot itself
-	// This isn't required in this specific example but it's a good practice.
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
-
 	if strings.HasPrefix(m.Content, "!") {
 		if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
 			fmt.Println("error deleting command message, ", err)
@@ -121,11 +119,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	commandText := strings.TrimPrefix(m.Content, "!")
-	//commandArgs := strings.Split(commandText, " ")
 	commandName := strings.ToLower(strings.Split(commandText, " ")[0])
-	//if len(commandArgs) > 1 {
-	//	args := strings.Split(commandText, " ")[1:]
-	//}
 	switch commandName {
 	case "onboardall":
 		onboard(s, m, newRole)
@@ -201,7 +195,6 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 		} else {
 			if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
 				fmt.Println("error sending permissions message, ", err)
-				return
 			}
 		}
 	}
