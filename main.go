@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -13,18 +12,23 @@ import (
 
 // Variables used for command line parameters
 var (
-	Token string
+	token string
+	newRole string
+	onboardingRole string
+	memberRole string
 )
 
 func init() {
-	flag.StringVar(&Token, "t", "", "Bot Token")
-	flag.Parse()
+	token = os.Getenv("SCOUT_TOKEN")
+	newRole = os.Getenv("NEW_ROLE")
+	onboardingRole = os.Getenv("ONBOARDING_ROLE")
+	memberRole = os.Getenv("MEMBER_ROLE")
 }
 
 func main() {
 
 	// Create a new Discord session using the provided bot token.
-	dg, err := discordgo.New("Bot " + Token)
+	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session, ", err)
 		return
@@ -103,18 +107,18 @@ func onboardAll(s *discordgo.Session, m *discordgo.MessageCreate) {
 		fmt.Println("error fetching message author, ", err)
 	}
 	if member != nil {
-		if contains(member.Roles, "575139388061777931") {
+		if contains(member.Roles, memberRole) {
 			if err != nil {
 				fmt.Println("error fetching guild members, ", err)
 			}
 			for _, member := range guild.Members {
-				if contains(member.Roles, "575139365123129354") {
+				if contains(member.Roles, memberRole) {
 					fmt.Println(member.Nick)
-					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, "575139365123129354"); err != nil {
-						fmt.Println("Error removing New Member role, ", err)
+					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, newRole); err != nil {
+						fmt.Println("Error removing new role, ", err)
 					}
-					if err = s.GuildMemberRoleAdd(guildID, member.User.ID, "575139388061777931"); err != nil {
-						fmt.Println("Error adding CFD Member role, ", err)
+					if err = s.GuildMemberRoleAdd(guildID, member.User.ID, memberRole); err != nil {
+						fmt.Println("Error adding member role, ", err)
 					}
 				}
 			}
@@ -129,13 +133,4 @@ func contains(slice []string, value string) bool {
 		}
 	}
 	return false
-}
-
-func indexOf(slice []string, value string) int {
-	for i, item := range slice {
-		if item == value {
-			return i
-		}
-	}
-	return -1
 }
