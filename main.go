@@ -150,6 +150,7 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 	}
 	if member != nil {
 		if contains(member.Roles, memberRole) {
+			onboardedUsers := make([]*discordgo.User, 0)
 			for _, member := range guild.Members {
 				if contains(member.Roles, r) {
 					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, r); err != nil {
@@ -160,7 +161,42 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 						fmt.Println("error adding member role, ", err)
 						return
 					}
+					onboardedUsers = append(onboardedUsers, member.User)
 				}
+			}
+			var confirmMessage *discordgo.Message
+			numberOnboarded := len(onboardedUsers)
+			if numberOnboarded > 0 {
+				confirmMessageContent := "Successfully onboarded "
+				for i, user := range onboardedUsers {
+					if numberOnboarded > 2 {
+						if i == numberOnboarded - 1 {
+							confirmMessageContent += "and <@!" + user.ID + ">"
+						} else {
+							confirmMessageContent += "<@!" + user.ID + ">, "
+						}
+					} else if numberOnboarded > 1 {
+						if i == numberOnboarded - 1 {
+							confirmMessageContent += " and <@!" + user.ID + ">"
+						} else {
+							confirmMessageContent += "<@!" + user.ID + ">"
+						}
+					} else {
+						confirmMessageContent += "<@!" + user.ID + ">"
+					}
+				}
+				confirmMessage = &discordgo.Message {
+					Content:      confirmMessageContent,
+					ChannelID:    m.ChannelID,
+				}
+			} else {
+				confirmMessage = &discordgo.Message {
+					Content:      "No users to onboard",
+					ChannelID:    m.ChannelID,
+				}
+			}
+			if _, err = s.ChannelMessageSend(m.ChannelID, confirmMessage.Content); err != nil {
+				fmt.Println("error sending onboarding confirmation message, ", err)
 			}
 		} else {
 			if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
