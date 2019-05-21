@@ -97,7 +97,13 @@ func userJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 
 func userReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 	if m.MessageID == codeOfConductMessageID {
-		if err := s.GuildMemberRoleAdd(m.GuildID, m.UserID, newRole); err != nil {
+		member, err := s.GuildMember(m.GuildID, m.UserID)
+		if err != nil {
+			fmt.Println("error fetching member who reactred, ", err)
+		}
+		if contains(member.Roles, newRole) || contains(member.Roles, onboardingRole) || contains(member.Roles, memberRole) {
+			return
+		} else if err = s.GuildMemberRoleAdd(m.GuildID, m.UserID, newRole); err != nil {
 			fmt.Println("error adding role, ", err)
 		}
 	}
