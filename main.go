@@ -2,23 +2,22 @@ package main
 
 import (
 	"fmt"
+	"github.com/bwmarrin/discordgo"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
-
-	"github.com/bwmarrin/discordgo"
 )
 
 // Global variables
 var (
-	token                string
-	newRole              string
-	onboardingRole       string
-	memberRole           string
-	onboardingInviteCode string
+	token                  string
+	newRole                string
+	onboardingRole         string
+	memberRole             string
+	onboardingInviteCode   string
 	codeOfConductMessageID string
-	inviteCount          = make(map[string]int, 0)
+	inviteCount            = make(map[string]int, 0)
 )
 
 func init() {
@@ -31,7 +30,6 @@ func init() {
 }
 
 func main() {
-
 	dg, err := discordgo.New("Bot " + token)
 	if err != nil {
 		fmt.Println("error creating Discord session, ", err)
@@ -122,7 +120,7 @@ func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	commandName := strings.ToLower(strings.Split(commandText, " ")[0])
 	switch commandName {
 	case "onboardall":
-		onboard(s, m, newRole)
+		onboard(s, m, onboardingRole, newRole)
 	case "onboard":
 		onboard(s, m, onboardingRole)
 	default:
@@ -130,7 +128,7 @@ func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
-func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
+func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
 	guildID := m.GuildID
 	guild, err := s.Guild(guildID)
 	if err != nil {
@@ -146,16 +144,19 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 		if contains(member.Roles, memberRole) {
 			onboardedUsers := make([]*discordgo.User, 0)
 			for _, member := range guild.Members {
-				if contains(member.Roles, r) {
-					if err = s.GuildMemberRoleRemove(guildID, member.User.ID, r); err != nil {
-						fmt.Println("error removing role, ", err)
-						return
+				for _, role := range r {
+					if contains(member.Roles, role) {
+						if err = s.GuildMemberRoleRemove(guildID, member.User.ID, role); err != nil {
+							fmt.Println("error removing role, ", err)
+							return
+						}
+						if err = s.GuildMemberRoleAdd(guildID, member.User.ID, memberRole); err != nil {
+							fmt.Println("error adding member role, ", err)
+							return
+						}
+						onboardedUsers = append(onboardedUsers, member.User)
+						break
 					}
-					if err = s.GuildMemberRoleAdd(guildID, member.User.ID, memberRole); err != nil {
-						fmt.Println("error adding member role, ", err)
-						return
-					}
-					onboardedUsers = append(onboardedUsers, member.User)
 				}
 			}
 			var confirmMessage *discordgo.Message
@@ -164,13 +165,13 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 				confirmMessageContent := "Successfully onboarded "
 				for i, user := range onboardedUsers {
 					if numberOnboarded > 2 {
-						if i == numberOnboarded - 1 {
+						if i == numberOnboarded-1 {
 							confirmMessageContent += "and <@!" + user.ID + ">"
 						} else {
 							confirmMessageContent += "<@!" + user.ID + ">, "
 						}
 					} else if numberOnboarded > 1 {
-						if i == numberOnboarded - 1 {
+						if i == numberOnboarded-1 {
 							confirmMessageContent += " and <@!" + user.ID + ">"
 						} else {
 							confirmMessageContent += "<@!" + user.ID + ">"
@@ -179,14 +180,14 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r string) {
 						confirmMessageContent += "<@!" + user.ID + ">"
 					}
 				}
-				confirmMessage = &discordgo.Message {
-					Content:      confirmMessageContent,
-					ChannelID:    m.ChannelID,
+				confirmMessage = &discordgo.Message{
+					Content:   confirmMessageContent,
+					ChannelID: m.ChannelID,
 				}
 			} else {
-				confirmMessage = &discordgo.Message {
-					Content:      "No users to onboard",
-					ChannelID:    m.ChannelID,
+				confirmMessage = &discordgo.Message{
+					Content:   "No users to onboard",
+					ChannelID: m.ChannelID,
 				}
 			}
 			if _, err = s.ChannelMessageSend(m.ChannelID, confirmMessage.Content); err != nil {
