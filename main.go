@@ -38,7 +38,7 @@ func main() {
 
 	dg.AddHandler(messageCreate)
 	dg.AddHandler(userJoin)
-	dg.AddHandler(joinGuild)
+	dg.AddHandler(connectToGuild)
 	dg.AddHandler(userReact)
 
 	err = dg.Open()
@@ -57,7 +57,8 @@ func main() {
 	}
 }
 
-func joinGuild(s *discordgo.Session, r *discordgo.Ready) {
+// When the bot connects to a server, record the number of uses on the onboarding invite
+func connectToGuild(s *discordgo.Session, r *discordgo.Ready) {
 	for _, guild := range r.Guilds {
 		invites, err := s.GuildInvites(guild.ID)
 		if err != nil {
@@ -73,6 +74,7 @@ func joinGuild(s *discordgo.Session, r *discordgo.Ready) {
 	}
 }
 
+// When a user joins the server, give them the onboarding role if they joined using the onboarding invite
 func userJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 	user := g.User
 	guildID := g.GuildID
@@ -95,11 +97,12 @@ func userJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 	}
 }
 
+// When a user reacts to the welcome message to indicate that they have read and understand the rules, promote them to the new member role.
 func userReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 	if m.MessageID == codeOfConductMessageID {
 		member, err := s.GuildMember(m.GuildID, m.UserID)
 		if err != nil {
-			fmt.Println("error fetching member who reactred, ", err)
+			fmt.Println("error fetching member who reacted, ", err)
 		}
 		if contains(member.Roles, newRole) || contains(member.Roles, onboardingRole) || contains(member.Roles, memberRole) {
 			return
@@ -109,6 +112,7 @@ func userReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 	}
 }
 
+// When a message is sent, check if it is a command and handle it accordingly.
 func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
@@ -121,6 +125,7 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
+// Dispatch appropriate function based on what command was sent
 func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	commandText := strings.TrimPrefix(m.Content, "!")
 	commandName := strings.ToLower(strings.Split(commandText, " ")[0])
@@ -134,6 +139,7 @@ func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 }
 
+// Give users with the onboarding and/or new member role the full member role
 func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
 	guildID := m.GuildID
 	guild, err := s.Guild(guildID)
