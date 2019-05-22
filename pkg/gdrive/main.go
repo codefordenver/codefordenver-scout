@@ -1,8 +1,11 @@
-package main
+package gdrive
 
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/codefordenver/scout/global"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/option"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -10,16 +13,37 @@ import (
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
-	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 )
 
+func Create() (*drive.Service, error) {
+	b, err := ioutil.ReadFile("credentials.json")
+	if err != nil {
+		log.Fatalf("Unable to read client secret file: %v", err)
+	}
+
+	// If modifying these scopes, delete your previously saved token.json.
+	config, err := google.ConfigFromJSON(b, drive.DriveMetadataReadonlyScope)
+	if err != nil {
+		log.Fatalf("Unable to parse client secret file to config: %v", err)
+	}
+	client := getClient(config)
+
+	ctx := context.Background()
+	srv, err := drive.NewService(ctx, option.WithHTTPClient(client), option.WithScopes(drive.DriveMetadataReadonlyScope))
+	if err != nil {
+		log.Fatalf("Unable to retrieve Drive client: %v", err)
+		return nil, err
+	}
+	return srv, nil
+}
+
 // Retrieve a token, saves the token, then returns the generated client.
 func getClient(config *oauth2.Config) *http.Client {
-	// The file credentials.json stores the user's access and refresh tokens, and is
+	// The file token.json stores the user's access and refresh tokens, and is
 	// created automatically when the authorization flow completes for the first
 	// time.
-	tokFile := "credentials.json"
+	tokFile := "token.json"
 	tok, err := tokenFromFile(tokFile)
 	if err != nil {
 		tok = getTokenFromWeb(config)
@@ -66,38 +90,21 @@ func saveToken(path string, token *oauth2.Token) {
 		log.Fatalf("Unable to cache oauth token: %v", err)
 	}
 	defer f.Close()
-	json.NewEncoder(f).Encode(token)
+	if err = json.NewEncoder(f).Encode(token); err != nil {
+		fmt.Println("Failed to encode token to JSON")
+	}
 }
 
-func main() {
-	b, err := ioutil.ReadFile("credentials.json")
+func FetchAgenda(s *drive.Service) string {
+	r, err := s.Files.List().Q(fmt.Sprintf("'%s' in parents", global.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).
+		Fields("files(id, name, parents, webViewLink)").Do()
 	if err != nil {
-		log.Fatalf("Unable to read client secret file: %v", err)
+		fmt.Println(err)
+		return "Error fetching files from Google Drive"
 	}
-
-	// If modifying these scopes, delete your previously saved token.json.
-	config, err := google.ConfigFromJSON(b, drive.DriveMetadataReadonlyScope)
-	if err != nil {
-		log.Fatalf("Unable to parse client secret file to config: %v", err)
-	}
-	client := getClient(config)
-
-	srv, err := drive.New(client)
-	if err != nil {
-		log.Fatalf("Unable to retrieve Drive client: %v", err)
-	}
-
-	r, err := srv.Files.List().PageSize(10).
-		Fields("nextPageToken, files(id, name)").Do()
-	if err != nil {
-		log.Fatalf("Unable to retrieve files: %v", err)
-	}
-	fmt.Println("Files:")
 	if len(r.Files) == 0 {
-		fmt.Println("No files found.")
+		return "No files found"
 	} else {
-		for _, i := range r.Files {
-			fmt.Printf("%s (%s)\n", i.Name, i.Id)
-		}
+		return r.Files[0].WebViewLink
 	}
 }

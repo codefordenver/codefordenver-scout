@@ -1,3 +1,4 @@
 # ignore secrets
 credentials.json
+token.json
 main
