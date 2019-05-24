@@ -19,6 +19,7 @@ func init() {
 	global.OnboardingInviteCode = os.Getenv("ONBOARDING_INVITE_CODE")
 	global.CodeOfConductMessageID = os.Getenv("CODE_OF_CONDUCT_MESSAGE_ID")
 	global.AgendaFolderID = os.Getenv("AGENDA_FOLDER_ID")
+	global.LocationString = os.Getenv("SCOUTLOCATION_STRING")
 }
 
 func main() {

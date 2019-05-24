@@ -10,6 +10,7 @@ var (
 	OnboardingInviteCode   string
 	CodeOfConductMessageID string
 	AgendaFolderID         string
+	LocationString         string
 	InviteCount            = make(map[string]int, 0)
 	DriveClient            *drive.Service
 )

@@ -161,6 +161,7 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
 
 }
 
+// Return a link to the agenda for the next meeting
 func getAgenda(s *discordgo.Session, m *discordgo.MessageCreate) {
 	message := gdrive.FetchAgenda(global.DriveClient)
 	if _, err := s.ChannelMessageSend(m.ChannelID, message); err != nil {

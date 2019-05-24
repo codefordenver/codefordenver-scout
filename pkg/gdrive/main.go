@@ -4,18 +4,57 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/codefordenver/scout/global"
+	"github.com/rickar/cal"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
 	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"golang.org/x/net/context"
 	"golang.org/x/oauth2"
 	"google.golang.org/api/drive/v3"
 )
 
+var c *cal.Calendar
+
+func Monday(date time.Time) time.Time {
+	weekdayInt := int(date.Weekday())
+	if 8-weekdayInt >= 7 {
+		return date.AddDate(0, 0, 1-weekdayInt)
+	} else {
+		return date.AddDate(0, 0, 8-weekdayInt)
+	}
+}
+
+// Get the time corresponding to the first day of the current month
+func StartOfMonth() time.Time {
+	location, err := time.LoadLocation(global.LocationString)
+	if err != nil {
+		fmt.Println(err)
+	}
+	date := time.Now().In(location)
+	return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
+}
+
+// Get which monday of the month a date is(or -1 if it is not a monday)
+func MondayOfMonth(date time.Time) int {
+	if date.Weekday() == time.Monday {
+		return (date.Day()-Monday(StartOfMonth()).Day())/7 + 1
+	} else {
+		return -1
+	}
+}
+
+// Check if date is a meeting day
+func isMeetingDay(date time.Time) bool {
+	mondayInt := MondayOfMonth(date)
+	return mondayInt == 1 || mondayInt == 2 || mondayInt == 4
+}
+
+// Create a drive API client and calendar object for meeting tracking
 func Create() (*drive.Service, error) {
 	b, err := ioutil.ReadFile("credentials.json")
 	if err != nil {
@@ -23,7 +62,7 @@ func Create() (*drive.Service, error) {
 	}
 
 	// If modifying these scopes, delete your previously saved token.json.
-	config, err := google.ConfigFromJSON(b, drive.DriveMetadataReadonlyScope)
+	config, err := google.ConfigFromJSON(b, drive.DriveReadonlyScope, drive.DriveFileScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
@@ -35,6 +74,13 @@ func Create() (*drive.Service, error) {
 		log.Fatalf("Unable to retrieve Drive client: %v", err)
 		return nil, err
 	}
+
+	c = cal.NewCalendar()
+
+	c.WorkdayFunc = isMeetingDay
+
+	cal.AddUsHolidays(c)
+
 	return srv, nil
 }
 
@@ -96,15 +142,41 @@ func saveToken(path string, token *oauth2.Token) {
 }
 
 func FetchAgenda(s *drive.Service) string {
-	r, err := s.Files.List().Q(fmt.Sprintf("'%s' in parents", global.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).
-		Fields("files(id, name, parents, webViewLink)").Do()
+	location, err := time.LoadLocation(global.LocationString)
+	if err != nil {
+		fmt.Println(err)
+	}
+	date := time.Date(2019, time.June, 1, 0, 0, 0, 0, location)
+
+	nextMeetingDate := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
+
+	if c.WorkdaysRemain(date) == 0 {
+		nextMonth := date.AddDate(0, 1, 0)
+		nextMeetingDate = nextMeetingDate.AddDate(0, 1, c.WorkdayN(nextMonth.Year(), nextMonth.Month(), 1)-1)
+	} else {
+		nextMeetingDate = nextMeetingDate.AddDate(0, 0, c.WorkdayN(date.Year(), date.Month(), c.Workdays(date.Year(), date.Month())-c.WorkdaysRemain(date)+1)-1)
+	}
+	r, err := s.Files.List().Q(fmt.Sprintf("name contains 'Meeting Agenda - %s'", nextMeetingDate.Format("2006/01/02"))).OrderBy("modifiedTime desc").PageSize(1).
+		Fields("files(name, webViewLink)").Do()
 	if err != nil {
 		fmt.Println(err)
 		return "Error fetching files from Google Drive"
 	}
+	var agenda *drive.File
 	if len(r.Files) == 0 {
-		return "No files found"
+		r, err = s.Files.List().Q(fmt.Sprintf("'%s' in parents", global.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
+		if err != nil {
+			fmt.Println(err)
+			return "Error fetching files from Google Drive"
+		}
+		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
+		agenda, err = s.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
+		if err != nil {
+			fmt.Println(err)
+			return "Error creating new agenda"
+		}
 	} else {
-		return r.Files[0].WebViewLink
+		agenda = r.Files[0]
 	}
+	return fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink)
 }
