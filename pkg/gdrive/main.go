@@ -146,7 +146,7 @@ func FetchAgenda(s *drive.Service) string {
 	if err != nil {
 		fmt.Println(err)
 	}
-	date := time.Date(2019, time.June, 1, 0, 0, 0, 0, location)
+	date := time.Now().In(location)
 
 	nextMeetingDate := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
 
