@@ -1,13 +1,14 @@
 package gdrive
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/codefordenver/scout/global"
 	"github.com/rickar/cal"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -56,13 +57,14 @@ func isMeetingDay(date time.Time) bool {
 
 // Create a drive API client and calendar object for meeting tracking
 func Create() (*drive.Service, error) {
-	b, err := ioutil.ReadFile("credentials.json")
+	credsEnv := os.Getenv("GDRIVE_CREDS")
+	creds, err := base64.StdEncoding.DecodeString(credsEnv)
 	if err != nil {
 		log.Fatalf("Unable to read client secret file: %v", err)
 	}
 
 	// If modifying these scopes, delete your previously saved token.json.
-	config, err := google.ConfigFromJSON(b, drive.DriveReadonlyScope, drive.DriveFileScope)
+	config, err := google.ConfigFromJSON(creds, drive.DriveReadonlyScope, drive.DriveFileScope)
 	if err != nil {
 		log.Fatalf("Unable to parse client secret file to config: %v", err)
 	}
@@ -92,9 +94,22 @@ func getClient(config *oauth2.Config) *http.Client {
 	tokFile := "token.json"
 	tok, err := tokenFromFile(tokFile)
 	if err != nil {
-		tok = getTokenFromWeb(config)
-		saveToken(tokFile, tok)
+		tokenEnv := os.Getenv("GDRIVE_ACCESS_TOKEN")
+		if tokenEnv == "" {
+			tok = getTokenFromWeb(config)
+		} else {
+			dToken, err := base64.StdEncoding.DecodeString(tokenEnv)
+			if err != nil {
+				log.Fatalf("Unable to read client secret file: %v", err)
+			}
+
+			tok = &oauth2.Token{}
+			r := bytes.NewReader(dToken)
+			err = json.NewDecoder(r).Decode(tok)
+		}
 	}
+
+	saveToken(tokFile, tok)
 	return config.Client(context.Background(), tok)
 }
 
