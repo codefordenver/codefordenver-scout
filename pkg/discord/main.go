@@ -72,19 +72,19 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
 			fmt.Println("error deleting command message, ", err)
 		}
-	}
-	guildID := m.GuildID
-	member, err := s.GuildMember(guildID, m.Author.ID)
-	if err != nil {
-		fmt.Println("error fetching message author, ", err)
-		return
-	}
-	if member != nil {
-		if contains(member.Roles, global.MemberRole) {
-			handleCommand(s, m)
-		} else {
-			if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
-				fmt.Println("error sending permissions message, ", err)
+		guildID := m.GuildID
+		member, err := s.GuildMember(guildID, m.Author.ID)
+		if err != nil {
+			fmt.Println("error fetching message author, ", err)
+			return
+		}
+		if member != nil {
+			if contains(member.Roles, global.MemberRole) {
+				handleCommand(s, m)
+			} else {
+				if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+					fmt.Println("error sending permissions message, ", err)
+				}
 			}
 		}
 	}

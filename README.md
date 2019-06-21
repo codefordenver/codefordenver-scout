@@ -23,7 +23,7 @@ MEMBER_ROLE
 ONBOARDING_INVITE_CODE
 CODE_OF_CONDUCT_MESSAGE_ID
 AGENDA_FOLDER_ID
-SCOUT_LOCATION_STRING
+SCOUT_LOCATION_STRING #Cannot be relative path
 ```
 Get these values from a current project member
 
