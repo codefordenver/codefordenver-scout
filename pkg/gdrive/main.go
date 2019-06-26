@@ -113,6 +113,7 @@ func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 	fmt.Printf("Go to the following link in your browser then type the "+
 		"authorization code: \n%v\n", authURL)
 
+	
 	var authCode string
 	if _, err := fmt.Scan(&authCode); err != nil {
 		fmt.Println("error reading authorization code,", err)

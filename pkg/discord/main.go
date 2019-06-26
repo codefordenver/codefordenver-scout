@@ -8,12 +8,12 @@ import (
 	"strings"
 )
 
-// When the bot connects to a server, record the number of uses on the onboarding invite
+// When the bot connects to a server, record the number of uses on the onboarding invite, set role IDs
 func ConnectToGuild(s *discordgo.Session, r *discordgo.Ready) {
 	for _, guild := range r.Guilds {
 		invites, err := s.GuildInvites(guild.ID)
 		if err != nil {
-			fmt.Println("error fetching guild invites, ", err)
+			fmt.Println("error fetching guild invites,", err)
 			return
 		}
 		for _, invite := range invites {
@@ -31,7 +31,7 @@ func UserJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 	guildID := g.GuildID
 	invites, err := s.GuildInvites(guildID)
 	if err != nil {
-		fmt.Println("error fetching guild invites, ", err)
+		fmt.Println("error fetching guild invites,", err)
 		return
 	}
 	for _, invite := range invites {
@@ -39,7 +39,7 @@ func UserJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 			if global.InviteCount[guildID] != invite.Uses {
 				global.InviteCount[guildID] = invite.Uses
 				if err := s.GuildMemberRoleAdd(guildID, user.ID, global.OnboardingRole); err != nil {
-					fmt.Println("error adding role, ", err)
+					fmt.Println("error adding role,", err)
 					return
 				}
 				return
@@ -53,12 +53,12 @@ func UserReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 	if m.MessageID == global.CodeOfConductMessageID {
 		member, err := s.GuildMember(m.GuildID, m.UserID)
 		if err != nil {
-			fmt.Println("error fetching member who reacted, ", err)
+			fmt.Println("error fetching member who reacted,", err)
 		}
 		if contains(member.Roles, global.NewRole) || contains(member.Roles, global.OnboardingRole) || contains(member.Roles, global.MemberRole) {
 			return
 		} else if err = s.GuildMemberRoleAdd(m.GuildID, m.UserID, global.NewRole); err != nil {
-			fmt.Println("error adding role, ", err)
+			fmt.Println("error adding role,", err)
 		}
 	}
 }
@@ -70,12 +70,12 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 	if strings.HasPrefix(m.Content, "!") {
 		if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
-			fmt.Println("error deleting command message, ", err)
+			fmt.Println("error deleting command message,", err)
 		}
 		guildID := m.GuildID
 		member, err := s.GuildMember(guildID, m.Author.ID)
 		if err != nil {
-			fmt.Println("error fetching message author, ", err)
+			fmt.Println("error fetching message author,", err)
 			return
 		}
 		if member != nil {
@@ -83,7 +83,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 				handleCommand(s, m)
 			} else {
 				if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
-					fmt.Println("error sending permissions message, ", err)
+					fmt.Println("error sending permissions message,", err)
 				}
 			}
 		}
@@ -102,7 +102,7 @@ func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
 	case "agenda":
 		getAgenda(s, m)
 	default:
-		fmt.Println("unrecognized command, ", commandName)
+		fmt.Println("unrecognized command,", commandName)
 	}
 }
 
@@ -111,7 +111,7 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
 	guildID := m.GuildID
 	guild, err := s.Guild(guildID)
 	if err != nil {
-		fmt.Println("error fetching guild, ", err)
+		fmt.Println("error fetching guild,", err)
 		return
 	}
 	onboardedUsers := make([]*discordgo.User, 0)
@@ -119,11 +119,11 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
 		for _, role := range r {
 			if contains(member.Roles, role) {
 				if err = s.GuildMemberRoleRemove(guildID, member.User.ID, role); err != nil {
-					fmt.Println("error removing role, ", err)
+					fmt.Println("error removing role,", err)
 					return
 				}
 				if err = s.GuildMemberRoleAdd(guildID, member.User.ID, global.MemberRole); err != nil {
-					fmt.Println("error adding member role, ", err)
+					fmt.Println("error adding member role,", err)
 					return
 				}
 				onboardedUsers = append(onboardedUsers, member.User)
@@ -156,7 +156,7 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
 		confirmMessageContent = "No users to onboard"
 	}
 	if _, err = s.ChannelMessageSend(m.ChannelID, confirmMessageContent); err != nil {
-		fmt.Println("error sending onboarding confirmation message, ", err)
+		fmt.Println("error sending onboarding confirmation message,", err)
 	}
 
 }
@@ -165,7 +165,7 @@ func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
 func getAgenda(s *discordgo.Session, m *discordgo.MessageCreate) {
 	message := gdrive.FetchAgenda(global.DriveClient)
 	if _, err := s.ChannelMessageSend(m.ChannelID, message); err != nil {
-		fmt.Println("error sending agenda message, ", err)
+		fmt.Println("error sending agenda message,", err)
 	}
 }
 

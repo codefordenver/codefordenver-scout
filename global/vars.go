@@ -1,7 +1,9 @@
 package global
 
-import "google.golang.org/api/drive/v3"
-import "github.com/google/go-github/github"
+import (
+	"github.com/google/go-github/github"
+	"google.golang.org/api/drive/v3"
+)
 
 var (
 	Token                  string

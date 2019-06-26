@@ -40,7 +40,7 @@ func main() {
 
 	dg, err := discordgo.New("Bot " + global.Token)
 	if err != nil {
-		fmt.Println("error creating Discord session, ", err)
+		fmt.Println("error creating Discord session,", err)
 		return
 	}
 
@@ -51,7 +51,7 @@ func main() {
 
 	err = dg.Open()
 	if err != nil {
-		fmt.Println("error opening connection, ", err)
+		fmt.Println("error opening connection,", err)
 		return
 
 	}

@@ -49,17 +49,8 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	//if event.Action == "create" {
-	//	handleRepositoryCreate(event.EventRepository)
-	//}
+	if event.Action == "create" {
+		//handleRepositoryCreate(event.EventRepository)
+	}
 
 }
-
-//func handleRepositoryCreate(repository Repository) {
-//	name := "web"
-//	hook := github.Hook{
-//		Name: &name,
-//
-//	}
-//	webhook, err := global.GithubClient.Repositories.CreateHook(context.Background(), repository.Owner, repository.Name)
-//}
