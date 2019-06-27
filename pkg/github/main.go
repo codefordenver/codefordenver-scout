@@ -75,17 +75,17 @@ func handleRepositoryCreate(repo Repository) {
 	//Create Github team
 	privacy := "closed"
 	newTeam := github.NewTeam{
-		Name:      repo.Name,
-		Privacy:   &privacy,
+		Name:    repo.Name,
+		Privacy: &privacy,
 	}
-	team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), "codefordenver", newTeam)
+	team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam)
 	if err != nil {
 		fmt.Println("error creating github team for new project,", err)
 		return
 	}
 
 	options := github.TeamAddTeamRepoOptions{Permission: "push"}
-	_, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, "codefordenver", repo.Name, &options)
+	_, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options)
 	if err != nil {
 		fmt.Println("error adding repository to team,", err)
 		return
