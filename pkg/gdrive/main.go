@@ -9,8 +9,6 @@ import (
 	"github.com/rickar/cal"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
-	"io/ioutil"
-	"log"
 	"net/http"
 	"os"
 	"time"
@@ -102,11 +100,15 @@ func getClient(config *oauth2.Config) (*http.Client, error) {
 	if err != nil {
 		tokenEnv := os.Getenv("GDRIVE_ACCESS_TOKEN")
 		if tokenEnv == "" {
-			tok = getTokenFromWeb(config)
+			tok, err = getTokenFromWeb(config)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			dToken, err := base64.StdEncoding.DecodeString(tokenEnv)
 			if err != nil {
-				log.Fatalf("Unable to read client secret file: %v", err)
+				fmt.Println("error reading client secret file,", err)
+				return nil, err
 			}
 
 			tok = &oauth2.Token{}
@@ -116,7 +118,7 @@ func getClient(config *oauth2.Config) (*http.Client, error) {
 	}
 
 	saveToken(tokFile, tok)
-	return config.Client(context.Background(), tok)
+	return config.Client(context.Background(), tok), nil
 }
 
 // Request a token from the web, then returns the retrieved token.
@@ -125,7 +127,6 @@ func getTokenFromWeb(config *oauth2.Config) (*oauth2.Token, error) {
 	fmt.Printf("Go to the following link in your browser then type the "+
 		"authorization code: \n%v\n", authURL)
 
-	
 	var authCode string
 	if _, err := fmt.Scan(&authCode); err != nil {
 		fmt.Println("error reading authorization code,", err)
