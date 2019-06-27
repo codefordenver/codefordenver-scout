@@ -1,1 +1,1 @@
-worker: bin/scout
+web: bin/scout

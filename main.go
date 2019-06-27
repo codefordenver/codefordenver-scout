@@ -58,7 +58,13 @@ func main() {
 
 	}
 
-	server := &http.Server{Addr: ":3000", Handler: http.HandlerFunc(github.HandleRepositoryEvent)}
+	port := os.Getenv("PORT")
+	var server *http.Server
+	if port == "" {
+		server = &http.Server{Addr: ":3000", Handler: http.HandlerFunc(github.HandleRepositoryEvent)}
+	} else {
+		server = &http.Server{Addr: ":" + port, Handler: http.HandlerFunc(github.HandleRepositoryEvent)}
+	}
 
 	go func() {
 		err := server.ListenAndServe()
