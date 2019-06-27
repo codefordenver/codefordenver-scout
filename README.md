@@ -24,6 +24,8 @@ ONBOARDING_INVITE_CODE
 CODE_OF_CONDUCT_MESSAGE_ID
 AGENDA_FOLDER_ID
 SCOUT_LOCATION_STRING #Cannot be relative path
+DISCORD_GUILD_ID
+PROJECT_CATEGORY_ID
 ```
 Get these values from a current project member
 

@@ -26,6 +26,8 @@ func init() {
 	global.AgendaFolderID = os.Getenv("AGENDA_FOLDER_ID")
 	global.LocationString = os.Getenv("SCOUT_LOCATION_STRING")
 	global.PrivateKeyDir = os.Getenv("SCOUT_PRIVATE_KEY_DIR")
+	global.DiscordGuildId = os.Getenv("DISCORD_GUILD_ID")
+	global.ProjectCategoryId = os.Getenv("PROJECT_CATEGORY_ID")
 }
 
 func main() {
@@ -38,18 +40,18 @@ func main() {
 
 	global.GithubClient, err = github.Create()
 
-	dg, err := discordgo.New("Bot " + global.Token)
+	global.DiscordClient, err = discordgo.New("Bot " + global.Token)
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
 		return
 	}
 
-	dg.AddHandler(discord.MessageCreate)
-	dg.AddHandler(discord.UserJoin)
-	dg.AddHandler(discord.ConnectToGuild)
-	dg.AddHandler(discord.UserReact)
+	global.DiscordClient.AddHandler(discord.MessageCreate)
+	global.DiscordClient.AddHandler(discord.UserJoin)
+	global.DiscordClient.AddHandler(discord.ConnectToGuild)
+	global.DiscordClient.AddHandler(discord.UserReact)
 
-	err = dg.Open()
+	err = global.DiscordClient.Open()
 	if err != nil {
 		fmt.Println("error opening connection,", err)
 		return
@@ -71,7 +73,7 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
-	if err = dg.Close(); err != nil {
+	if err = global.DiscordClient.Close(); err != nil {
 		fmt.Println("error closing Discord session, ", err)
 	}
 
