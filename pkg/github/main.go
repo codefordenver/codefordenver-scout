@@ -89,7 +89,7 @@ func handleRepositoryCreate(repo Repository) {
 		}
 	}
 
-	
+
 }
 
 func handleRepositoryDelete(repo Repository) {
