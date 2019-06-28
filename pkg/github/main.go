@@ -1,6 +1,7 @@
 package github
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/bradleyfalzon/ghinstallation"
@@ -59,14 +60,34 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRepositoryCreate(repo Repository) {
+	//Create Discord channel
 	channelCreateData := discordgo.GuildChannelCreateData{
-		Name: repo.Name,
-		Type: discordgo.ChannelTypeGuildText,
+		Name:     repo.Name,
+		Type:     discordgo.ChannelTypeGuildText,
 		ParentID: global.ProjectCategoryId,
 	}
 	_, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData)
 	if err != nil {
 		fmt.Println("error creating text channel for new project,", err)
+		return
+	}
+
+	//Create Github team
+	privacy := "closed"
+	newTeam := github.NewTeam{
+		Name:    repo.Name,
+		Privacy: &privacy,
+	}
+	team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam)
+	if err != nil {
+		fmt.Println("error creating github team for new project,", err)
+		return
+	}
+
+	options := github.TeamAddTeamRepoOptions{Permission: "push"}
+	_, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options)
+	if err != nil {
+		fmt.Println("error adding repository to team,", err)
 		return
 	}
 }
