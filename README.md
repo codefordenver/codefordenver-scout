@@ -26,6 +26,8 @@ AGENDA_FOLDER_ID=
 SCOUT_LOCATION_STRING=
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
+DISCORD_GUILD_ID
+PROJECT_CATEGORY_ID
 ```
 Get these values from a current project member
 
