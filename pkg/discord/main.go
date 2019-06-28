@@ -69,6 +69,14 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	if strings.HasPrefix(m.Content, "!") {
+		channel, err := s.Channel(m.ChannelID)
+		if err != nil {
+			fmt.Println("error fetching channel,", err)
+		}
+		var dm bool
+		if channel.Type == discordgo.ChannelTypeDM || channel.Type == discordgo.ChannelTypeGroupDM {
+			dm = true
+		}
 		if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
 			fmt.Println("error deleting command message,", err)
 		}
