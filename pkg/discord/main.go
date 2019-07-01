@@ -8,6 +8,12 @@ import (
 	"strings"
 )
 
+type Command struct {
+	DM bool
+	Handler func()
+
+}
+
 // When the bot connects to a server, record the number of uses on the onboarding invite, set role IDs
 func ConnectToGuild(s *discordgo.Session, r *discordgo.Ready) {
 	for _, guild := range r.Guilds {
