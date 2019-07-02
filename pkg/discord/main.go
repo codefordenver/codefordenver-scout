@@ -27,6 +27,8 @@ type CommandHandler struct {
 	Commands map[string]Command
 }
 
+var cmdHandler CommandHandler
+
 // Dispatch a command, checking permissions first
 func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *discordgo.MessageCreate) error {
 	command := c.Commands[key]
@@ -38,6 +40,10 @@ func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *dis
 		}
 		if contains(member.Roles, global.MemberRole) {
 			command.Handler(s, m)
+		} else {
+			if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+				fmt.Println("error sending permissions message,", err)
+			}
 		}
 	case PermissionDM:
 		channel, err := s.Channel(m.ChannelID)
@@ -46,6 +52,10 @@ func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *dis
 		}
 		if channel.Type == discordgo.ChannelTypeDM || channel.Type == discordgo.ChannelTypeGroupDM {
 			command.Handler(s, m)
+		} else {
+			if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a DM"); err != nil {
+				fmt.Println("error sending permissions message,", err)
+			}
 		}
 	case PermissionAll:
 		command.Handler(s, m)
@@ -59,7 +69,33 @@ func (c *CommandHandler) RegisterCommand(cmd Command) {
 }
 
 // Create discord session and command handler
-func Create() *discord
+func Create() (*discordgo.Session, error) {
+	dg, err := discordgo.New("Bot " + global.Token)
+	if err != nil {
+		return nil, err
+	}
+
+	onboardCommand := Command{Keyword: "onboard",
+		Args:       false,
+		Handler:    onboard,
+		Permission: PermissionMembers,
+	}
+	cmdHandler.RegisterCommand(onboardCommand)
+	onboardAllCommand := Command{Keyword: "onboardall",
+		Args:       false,
+		Handler:    onboardAll,
+		Permission: PermissionMembers,
+	}
+	cmdHandler.RegisterCommand(onboardAllCommand)
+	getAgendaCommand := Command{Keyword: "agenda",
+		Args:       false,
+		Handler:    getAgenda,
+		Permission: PermissionAll,
+	}
+	cmdHandler.RegisterCommand(getAgendaCommand)
+
+	return dg, nil
+}
 
 // When the bot connects to a server, record the number of uses on the onboarding invite, set role IDs.
 func ConnectToGuild(s *discordgo.Session, r *discordgo.Ready) {
@@ -125,42 +161,27 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
 			fmt.Println("error deleting command message,", err)
 		}
-		guildID := m.GuildID
-		member, err := s.GuildMember(guildID, m.Author.ID)
+		commandText := strings.TrimPrefix(m.Content, "!")
+		commandName := strings.ToLower(strings.Split(commandText, " ")[0])
+		err := cmdHandler.DispatchCommand(commandName, s, m)
 		if err != nil {
-			fmt.Println("error fetching message author,", err)
-			return
-		}
-		if member != nil {
-			if contains(member.Roles, global.MemberRole) {
-				handleCommand(s, m)
-			} else {
-				if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
-					fmt.Println("error sending permissions message,", err)
-				}
-			}
+
 		}
 	}
 }
 
-// Dispatch appropriate function based on what command was sent
-func handleCommand(s *discordgo.Session, m *discordgo.MessageCreate) {
-	commandText := strings.TrimPrefix(m.Content, "!")
-	commandName := strings.ToLower(strings.Split(commandText, " ")[0])
-	switch commandName {
-	case "onboardall":
-		onboard(s, m, global.OnboardingRole, global.NewRole)
-	case "onboard":
-		onboard(s, m, global.OnboardingRole)
-	case "agenda":
-		getAgenda(s, m)
-	default:
-		fmt.Println("unrecognized command,", commandName)
-	}
+// Onboard members with the onboarding role.
+func onboard(s *discordgo.Session, m *discordgo.MessageCreate) {
+	onboardGroup(s, m, global.OnboardingRole)
+}
+
+// Onboard members with the onboarding or new member role.
+func onboardAll(s *discordgo.Session, m *discordgo.MessageCreate) {
+	onboardGroup(s, m, global.OnboardingRole, global.NewRole)
 }
 
 // Give users with the onboarding and/or new member role the full member role
-func onboard(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
+func onboardGroup(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
 	guildID := m.GuildID
 	guild, err := s.Guild(guildID)
 	if err != nil {
