@@ -8,6 +8,15 @@ import (
 	"strings"
 )
 
+<<<<<<< Updated upstream
+type Command struct {
+	DM bool
+	Handler func()
+
+}
+
+// When the bot connects to a server, record the number of uses on the onboarding invite, set role IDs
+=======
 type Permission int
 
 const (
@@ -62,6 +71,7 @@ func (c *CommandHandler) RegisterCommand(cmd Command) {
 func Create() *discord
 
 // When the bot connects to a server, record the number of uses on the onboarding invite, set role IDs.
+>>>>>>> Stashed changes
 func ConnectToGuild(s *discordgo.Session, r *discordgo.Ready) {
 	for _, guild := range r.Guilds {
 		invites, err := s.GuildInvites(guild.ID)
@@ -122,6 +132,14 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	if strings.HasPrefix(m.Content, "!") {
+		channel, err := s.Channel(m.ChannelID)
+		if err != nil {
+			fmt.Println("error fetching channel,", err)
+		}
+		var dm bool
+		if channel.Type == discordgo.ChannelTypeDM || channel.Type == discordgo.ChannelTypeGroupDM {
+			dm = true
+		}
 		if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
 			fmt.Println("error deleting command message,", err)
 		}
