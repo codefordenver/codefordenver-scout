@@ -15,7 +15,7 @@ import (
 type Repository struct {
 	Name  string `json:"name"`
 	Owner struct {
-		Name string `json:"name"`
+		Name string `json:"login"`
 	} `json:"owner"`
 }
 
@@ -66,11 +66,28 @@ func handleRepositoryCreate(repo Repository) {
 		Type:     discordgo.ChannelTypeGuildText,
 		ParentID: global.ProjectCategoryId,
 	}
-	_, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData)
+	textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData)
 	if err != nil {
 		fmt.Println("error creating text channel for new project,", err)
 		return
 	}
+
+	discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", "")
+	if err != nil {
+		fmt.Println("error creating github webhook for text channel,", err)
+	}
+
+	discordWebhookURL := "https://discordapp.com/api/webhooks/" + discordWebhook.Token + "/github"
+	githubHookName := "web"
+	githubHookConfig := make(map[string]interface{})
+	githubHookConfig["content_type"] = "json"
+	githubHook := github.Hook{
+		Name: &githubHookName,
+		URL: &discordWebhookURL,
+		Config: githubHookConfig,
+	}
+
+	_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
 
 	//Create Github team
 	privacy := "closed"
