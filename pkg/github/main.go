@@ -77,17 +77,20 @@ func handleRepositoryCreate(repo Repository) {
 		fmt.Println("error creating github webhook for text channel,", err)
 	}
 
-	discordWebhookURL := "https://discordapp.com/api/webhooks/" + discordWebhook.Token + "/github"
+	discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
 	githubHookName := "web"
 	githubHookConfig := make(map[string]interface{})
 	githubHookConfig["content_type"] = "json"
+	githubHookConfig["url"] = discordWebhookURL
 	githubHook := github.Hook{
-		Name: &githubHookName,
-		URL: &discordWebhookURL,
+		Name:   &githubHookName,
 		Config: githubHookConfig,
 	}
 
 	_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+	if err != nil {
+		fmt.Println("error creating Github webhook,", err)
+	}
 
 	//Create Github team
 	privacy := "closed"
@@ -102,25 +105,46 @@ func handleRepositoryCreate(repo Repository) {
 	}
 
 	options := github.TeamAddTeamRepoOptions{Permission: "push"}
-	_, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options)
-	if err != nil {
+	if _, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
 		fmt.Println("error adding repository to team,", err)
 		return
 	}
 }
 
 func handleRepositoryDelete(repo Repository) {
-	channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId)
-	if err != nil {
+	if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
 		fmt.Println("error fetching Discord guild,", err)
-	}
-	for _, channel := range channels {
-		if channel.Name == repo.Name {
-			_, err = global.DiscordClient.ChannelDelete(channel.ID)
-			if err != nil {
-				fmt.Println("error deleting text channel for deleted project,", err)
+	} else {
+		for _, channel := range channels {
+			if channel.Name == repo.Name {
+				if _, err = global.DiscordClient.ChannelDelete(channel.ID); err != nil {
+					fmt.Println("error deleting text channel for deleted project,", err)
+				}
+				break
 			}
-			return
 		}
 	}
+	nextPage := 0
+	for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
+		opt := github.ListOptions{
+			Page:    nextPage,
+			PerPage: 100,
+		}
+		teams, res, err := global.GithubClient.Teams.ListTeams(context.Background(), repo.Owner.Name, &opt)
+		if err != nil {
+			fmt.Println("error fetching Github team,", err)
+			nextPage = 0
+		} else {
+			nextPage = res.NextPage
+			for _, team := range teams {
+				if *team.Name == repo.Name {
+					if _, err = global.GithubClient.Teams.DeleteTeam(context.Background(), *team.ID); err != nil {
+						fmt.Println("error deleting github team for deleted project,", err)
+					}
+					break
+				}
+			}
+		}
+	}
+
 }
