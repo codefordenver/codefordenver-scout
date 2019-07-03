@@ -165,7 +165,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		commandName := strings.ToLower(strings.Split(commandText, " ")[0])
 		err := cmdHandler.DispatchCommand(commandName, s, m)
 		if err != nil {
-
+			fmt.Println("error dispatching command", err)
 		}
 	}
 }
