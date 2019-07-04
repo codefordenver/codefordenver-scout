@@ -11,15 +11,25 @@ import (
 // When the bot connects to a server, record the number of uses on the onboarding invite, set role IDs
 func ConnectToGuild(s *discordgo.Session, r *discordgo.Ready) {
 	for _, guild := range r.Guilds {
+		roles, err := s.GuildRoles(guild.ID)
+		if err != nil {
+			fmt.Println("error fetching guild roles,", err)
+		} else {
+			for _, role := range roles {
+				if role.Name == "@everyone" {
+					global.EveryoneRole[guild.ID] = role.ID
+				}
+			}
+		}
 		invites, err := s.GuildInvites(guild.ID)
 		if err != nil {
 			fmt.Println("error fetching guild invites,", err)
-			return
-		}
-		for _, invite := range invites {
-			if invite.Code == global.OnboardingInviteCode {
-				global.InviteCount[guild.ID] = invite.Uses
-				break
+		} else {
+			for _, invite := range invites {
+				if invite.Code == global.OnboardingInviteCode {
+					global.InviteCount[guild.ID] = invite.Uses
+					break
+				}
 			}
 		}
 	}

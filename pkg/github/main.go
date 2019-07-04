@@ -74,7 +74,8 @@ func handleRepositoryCreate(repo Repository) {
 	colorInt := int(color.Red)
 	colorInt = (colorInt << 8) + int(color.Green)
 	colorInt = (colorInt << 8) + int(color.Blue)
-	if championRole, err := global.DiscordClient.GuildRoleCreate(global.DiscordGuildId); err != nil {
+	championRole, err := global.DiscordClient.GuildRoleCreate(global.DiscordGuildId)
+	if err != nil {
 		fmt.Println("error creating role for new project,", err)
 	} else {
 		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
@@ -82,7 +83,8 @@ func handleRepositoryCreate(repo Repository) {
 			fmt.Println("error editing role for new project,", err)
 		}
 	}
-	if 	projectRole, err := global.DiscordClient.GuildRoleCreate(global.DiscordGuildId); err != nil {
+	projectRole, err := global.DiscordClient.GuildRoleCreate(global.DiscordGuildId)
+	if err != nil {
 		fmt.Println("error creating role for new project,", err)
 	} else {
 		color = color.Lighten(.25)
@@ -96,12 +98,32 @@ func handleRepositoryCreate(repo Repository) {
 	}
 
 	// Create Discord channel
-	channelCreateData := discordgo.GuildChannelCreateData{
-		Name:                 repo.Name,
-		Type:                 discordgo.ChannelTypeGuildText,
-		ParentID:             global.ProjectCategoryId,
+	projectChampionOverwrite := discordgo.PermissionOverwrite{
+		ID:    championRole.ID,
+		Type:  "role",
+		Allow: discordgo.PermissionReadMessages,
 	}
-	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData); err != nil {
+	projectOverwrite := discordgo.PermissionOverwrite{
+		ID:    projectRole.ID,
+		Type:  "role",
+		Allow: discordgo.PermissionReadMessages,
+	}
+	everyoneOverwrite := discordgo.PermissionOverwrite{
+		ID:   global.EveryoneRole[global.DiscordGuildId],
+		Type: "role",
+		Deny: discordgo.PermissionReadMessages,
+	}
+	channelCreateData := discordgo.GuildChannelCreateData{
+		Name:     repo.Name,
+		Type:     discordgo.ChannelTypeGuildText,
+		ParentID: global.ProjectCategoryId,
+		PermissionOverwrites: []*discordgo.PermissionOverwrite{
+			&projectChampionOverwrite,
+			&projectOverwrite,
+			&everyoneOverwrite,
+		},
+	}
+	if _, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData); err != nil {
 		fmt.Println("error creating text channel for new project,", err)
 	} else {
 		// Create Discord webhook
