@@ -166,8 +166,19 @@ func handleRepositoryCreate(repo Repository) {
 }
 
 func handleRepositoryDelete(repo Repository) {
+	if roles, err := global.DiscordClient.GuildRoles(global.DiscordGuildId); err != nil {
+		fmt.Println("error fetching Discord roles")
+	} else {
+		for _, role := range roles {
+			if role.Name == repo.Name || role.Name == repo.Name + "-champion"{
+				if err = global.DiscordClient.GuildRoleDelete(global.DiscordGuildId, role.ID); err != nil {
+					fmt.Println("error deleting role for deleted project,", err)
+				}
+			}
+		}
+	}
 	if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
-		fmt.Println("error fetching Discord guild,", err)
+		fmt.Println("error fetching Discord channels,", err)
 	} else {
 		for _, channel := range channels {
 			if channel.Name == repo.Name {
