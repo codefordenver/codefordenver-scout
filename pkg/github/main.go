@@ -8,8 +8,11 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/scout/global"
 	"github.com/google/go-github/github"
+	"github.com/teacat/noire"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
+	"time"
 )
 
 type Repository struct {
@@ -24,7 +27,11 @@ type RepositoryEvent struct {
 	EventRepository Repository `json:"repository"`
 }
 
+var colorGenerator *rand.Rand
+
 func Create() (*github.Client, error) {
+	colorGenerator = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	tr := http.DefaultTransport
 	itr, err := ghinstallation.NewKeyFromFile(tr, 31388, 1101679, global.PrivateKeyDir+"cfd-scout.2019-05-23.private-key.pem")
 	if err != nil {
@@ -59,56 +66,81 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Setup tasks for a repository being created
 func handleRepositoryCreate(repo Repository) {
-	//Create Discord channel
-	channelCreateData := discordgo.GuildChannelCreateData{
-		Name:     repo.Name,
-		Type:     discordgo.ChannelTypeGuildText,
-		ParentID: global.ProjectCategoryId,
+
+	// Create Discord roles
+	color := noire.NewRGB(float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)))
+	colorInt := int(color.Red)
+	colorInt = (colorInt << 8) + int(color.Green)
+	colorInt = (colorInt << 8) + int(color.Blue)
+	if projectRole, err := global.DiscordClient.GuildRoleCreate(global.DiscordGuildId); err != nil {
+		fmt.Println("error creating role for new project,", err)
+	} else {
+		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
+		if _, err = global.DiscordClient.GuildRoleEdit(global.DiscordGuildId, projectRole.ID, repo.Name, colorInt, false, rolePermission, true); err != nil {
+			fmt.Println("error editing role for new project,", err)
+		}
 	}
-	textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData)
-	if err != nil {
-		fmt.Println("error creating text channel for new project,", err)
-		return
+	if championRole, err := global.DiscordClient.GuildRoleCreate(global.DiscordGuildId); err != nil {
+		fmt.Println("error creating role for new project,", err)
+	} else {
+		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
+		color = color.Darken(.25)
+		colorInt := int(color.Red)
+		colorInt = (colorInt << 8) + int(color.Green)
+		colorInt = (colorInt << 8) + int(color.Blue)
+		if _, err = global.DiscordClient.GuildRoleEdit(global.DiscordGuildId, championRole.ID, repo.Name + "-champion", colorInt, false, rolePermission, true); err != nil {
+			fmt.Println("error editing role for new project,", err)
+		}
 	}
 
-	discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", "")
-	if err != nil {
-		fmt.Println("error creating github webhook for text channel,", err)
-	}
-
-	discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
-	githubHookName := "web"
-	githubHookConfig := make(map[string]interface{})
-	githubHookConfig["content_type"] = "json"
-	githubHookConfig["url"] = discordWebhookURL
-	githubHook := github.Hook{
-		Name:   &githubHookName,
-		Config: githubHookConfig,
-	}
-
-	_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
-	if err != nil {
-		fmt.Println("error creating Github webhook,", err)
-	}
-
-	//Create Github team
-	privacy := "closed"
-	newTeam := github.NewTeam{
-		Name:    repo.Name,
-		Privacy: &privacy,
-	}
-	team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam)
-	if err != nil {
-		fmt.Println("error creating github team for new project,", err)
-		return
-	}
-
-	options := github.TeamAddTeamRepoOptions{Permission: "push"}
-	if _, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
-		fmt.Println("error adding repository to team,", err)
-		return
-	}
+	//// Create Discord channel
+	//channelCreateData := discordgo.GuildChannelCreateData{
+	//	Name:     repo.Name,
+	//	Type:     discordgo.ChannelTypeGuildText,
+	//	ParentID: global.ProjectCategoryId,
+	//}
+	//if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData); err != nil {
+	//	fmt.Println("error creating text channel for new project,", err)
+	//} else {
+	//	// Create Discord webhook
+	//	if discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
+	//		fmt.Println("error creating github webhook for text channel,", err)
+	//	} else {
+	//		discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
+	//		githubHookName := "web"
+	//		githubHookConfig := make(map[string]interface{})
+	//		githubHookConfig["content_type"] = "json"
+	//		githubHookConfig["url"] = discordWebhookURL
+	//		githubHook := github.Hook{
+	//			Name:   &githubHookName,
+	//			Config: githubHookConfig,
+	//		}
+	//
+	//		_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+	//		if err != nil {
+	//			fmt.Println("error creating Github webhook,", err)
+	//		}
+	//	}
+	//}
+	//
+	//// Create Github team
+	//privacy := "closed"
+	//newTeam := github.NewTeam{
+	//	Name:    repo.Name,
+	//	Privacy: &privacy,
+	//}
+	//if team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam); err != nil {
+	//	fmt.Println("error creating github team for new project,", err)
+	//} else {
+	//	// Add repository to Github team
+	//	options := github.TeamAddTeamRepoOptions{Permission: "push"}
+	//	if _, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
+	//		fmt.Println("error adding repository to team,", err)
+	//		return
+	//	}
+	//}
 }
 
 func handleRepositoryDelete(repo Repository) {
