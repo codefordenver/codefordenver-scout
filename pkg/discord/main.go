@@ -14,6 +14,7 @@ const (
 	PermissionAll Permission = iota
 	PermissionMembers
 	PermissionDM
+	PermissionChannel
 )
 
 type Command struct {
@@ -54,6 +55,18 @@ func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *dis
 			command.Handler(s, m)
 		} else {
 			if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a DM"); err != nil {
+				fmt.Println("error sending permissions message,", err)
+			}
+		}
+	case PermissionChannel:
+		channel, err := s.Channel(m.ChannelID)
+		if err != nil {
+			return err
+		}
+		if channel.Type == discordgo.ChannelTypeGuildText {
+			command.Handler(s, m)
+		} else {
+			if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
 				fmt.Println("error sending permissions message,", err)
 			}
 		}
