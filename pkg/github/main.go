@@ -66,7 +66,7 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Setup tasks for a repository being created
+// Chore tasks for creating a repository
 func handleRepositoryCreate(repo Repository) {
 
 	// Create Discord roles
@@ -165,9 +165,24 @@ func handleRepositoryCreate(repo Repository) {
 	}
 }
 
+// Chore tasks for deleting a repository
 func handleRepositoryDelete(repo Repository) {
+	// Delete Discord role
+	if roles, err := global.DiscordClient.GuildRoles(global.DiscordGuildId); err != nil {
+		fmt.Println("error fetching Discord roles")
+	} else {
+		for _, role := range roles {
+			if role.Name == repo.Name || role.Name == repo.Name + "-champion"{
+				if err = global.DiscordClient.GuildRoleDelete(global.DiscordGuildId, role.ID); err != nil {
+					fmt.Println("error deleting role for deleted project,", err)
+				}
+			}
+		}
+	}
+	
+	// Delete Discord channel
 	if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
-		fmt.Println("error fetching Discord guild,", err)
+		fmt.Println("error fetching Discord channels,", err)
 	} else {
 		for _, channel := range channels {
 			if channel.Name == repo.Name {
@@ -178,6 +193,8 @@ func handleRepositoryDelete(repo Repository) {
 			}
 		}
 	}
+
+	// Delete Github team
 	nextPage := 0
 	for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
 		opt := github.ListOptions{
