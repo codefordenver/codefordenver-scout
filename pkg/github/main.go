@@ -85,6 +85,7 @@ func handleRepositoryCreate(repo Repository) {
 	githubHook := github.Hook{
 		Name:   &githubHookName,
 		Config: githubHookConfig,
+		Events: []string{"push", "issues"},
 	}
 
 	_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
