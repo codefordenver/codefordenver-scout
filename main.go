@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/scout/global"
 	"github.com/codefordenver/scout/pkg/discord"
 	"github.com/codefordenver/scout/pkg/gdrive"
@@ -40,7 +39,7 @@ func main() {
 
 	global.GithubClient, err = github.Create()
 
-	global.DiscordClient, err = discordgo.New("Bot " + global.Token)
+	global.DiscordClient, err = discord.Create()
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
 		return
