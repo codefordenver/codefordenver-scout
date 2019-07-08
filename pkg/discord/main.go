@@ -116,9 +116,7 @@ func Create() (*discordgo.Session, error) {
 		Permission: PermissionMembers,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
-
-	fmt.Println(cmdHandler.Commands)
-
+	
 	return dg, nil
 }
 
