@@ -196,7 +196,7 @@ func FetchAgenda() string {
 	nextMeetingDate := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
 
 	if c.IsWorkday(date) {
-		nextMeetingDate.AddDate(0, 0, date.Day())
+		nextMeetingDate = nextMeetingDate.AddDate(0, 0, date.Day()-1)
 	} else if c.WorkdaysRemain(date) == 0 {
 		nextMonth := date.AddDate(0, 1, 0)
 		nextMeetingDate = nextMeetingDate.AddDate(0, 1, c.WorkdayN(nextMonth.Year(), nextMonth.Month(), 1)-1)
