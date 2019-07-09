@@ -24,7 +24,6 @@ func init() {
 	global.CodeOfConductMessageID = os.Getenv("CODE_OF_CONDUCT_MESSAGE_ID")
 	global.AgendaFolderID = os.Getenv("AGENDA_FOLDER_ID")
 	global.LocationString = os.Getenv("SCOUT_LOCATION_STRING")
-	global.PrivateKeyDir = os.Getenv("SCOUT_PRIVATE_KEY_DIR")
 	global.DiscordGuildId = os.Getenv("DISCORD_GUILD_ID")
 	global.ProjectCategoryId = os.Getenv("PROJECT_CATEGORY_ID")
 }
