@@ -116,7 +116,7 @@ func Create() (*discordgo.Session, error) {
 		Permission: PermissionMembers,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
-	
+
 	return dg, nil
 }
 
@@ -181,8 +181,12 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		return
 	}
 	if strings.HasPrefix(m.Content, "!") {
-		if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
-			fmt.Println("error deleting command message,", err)
+		if channel, err := s.Channel(m.ChannelID); err != nil {
+			fmt.Println("error fetching command channel,", err)
+		} else if channel.Type == discordgo.ChannelTypeGuildText {
+			if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
+				fmt.Println("error deleting command message,", err)
+			}
 		}
 		commandText := strings.TrimPrefix(m.Content, "!")
 		commandName := strings.ToLower(strings.Split(commandText, " ")[0])
