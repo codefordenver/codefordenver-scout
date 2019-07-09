@@ -19,7 +19,6 @@ const (
 
 type Command struct {
 	Keyword    string
-	Args       bool
 	Handler    func(s *discordgo.Session, m *discordgo.MessageCreate)
 	Permission Permission
 }
@@ -32,48 +31,55 @@ var cmdHandler CommandHandler
 
 // Dispatch a command, checking permissions first
 func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *discordgo.MessageCreate) error {
-	command := c.Commands[key]
-	switch command.Permission {
-	case PermissionMembers:
-		member, err := s.GuildMember(m.GuildID, m.Author.ID)
-		if err != nil {
+	if command, exists := c.Commands[key]; exists {
+		switch command.Permission {
+		case PermissionMembers:
+			member, err := s.GuildMember(m.GuildID, m.Author.ID)
+			if err != nil {
+				return err
+			}
+			if contains(member.Roles, global.MemberRole) {
+				command.Handler(s, m)
+			} else {
+				if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+					fmt.Println("error sending permissions message,", err)
+				}
+			}
+		case PermissionDM:
+			channel, err := s.Channel(m.ChannelID)
+			if err != nil {
+				return err
+			}
+			if channel.Type == discordgo.ChannelTypeDM || channel.Type == discordgo.ChannelTypeGroupDM {
+				command.Handler(s, m)
+			} else {
+				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a DM"); err != nil {
+					fmt.Println("error sending permissions message,", err)
+				}
+			}
+		case PermissionChannel:
+			channel, err := s.Channel(m.ChannelID)
+			if err != nil {
+				return err
+			}
+			if channel.Type == discordgo.ChannelTypeGuildText {
+				command.Handler(s, m)
+			} else {
+				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
+					fmt.Println("error sending permissions message,", err)
+				}
+			}
+		case PermissionAll:
+			command.Handler(s, m)
+		}
+		return nil
+	} else {
+		if _, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Unrecognized command, %v", key)); err != nil {
+			fmt.Println("error sending unrecognized command message,", err)
 			return err
 		}
-		if contains(member.Roles, global.MemberRole) {
-			command.Handler(s, m)
-		} else {
-			if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
-				fmt.Println("error sending permissions message,", err)
-			}
-		}
-	case PermissionDM:
-		channel, err := s.Channel(m.ChannelID)
-		if err != nil {
-			return err
-		}
-		if channel.Type == discordgo.ChannelTypeDM || channel.Type == discordgo.ChannelTypeGroupDM {
-			command.Handler(s, m)
-		} else {
-			if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a DM"); err != nil {
-				fmt.Println("error sending permissions message,", err)
-			}
-		}
-	case PermissionChannel:
-		channel, err := s.Channel(m.ChannelID)
-		if err != nil {
-			return err
-		}
-		if channel.Type == discordgo.ChannelTypeGuildText {
-			command.Handler(s, m)
-		} else {
-			if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
-				fmt.Println("error sending permissions message,", err)
-			}
-		}
-	case PermissionAll:
-		command.Handler(s, m)
+		return nil
 	}
-	return nil
 }
 
 // Register a command to the command handler.
@@ -88,25 +94,29 @@ func Create() (*discordgo.Session, error) {
 		return nil, err
 	}
 
+	cmdHandler.Commands = make(map[string]Command)
+
 	onboardCommand := Command{Keyword: "onboard",
-		Args:       false,
 		Handler:    onboard,
 		Permission: PermissionMembers,
 	}
 	cmdHandler.RegisterCommand(onboardCommand)
 	onboardAllCommand := Command{Keyword: "onboardall",
-		Args:       false,
 		Handler:    onboardAll,
 		Permission: PermissionMembers,
 	}
 	cmdHandler.RegisterCommand(onboardAllCommand)
 	getAgendaCommand := Command{Keyword: "agenda",
-		Args:       false,
 		Handler:    getAgenda,
 		Permission: PermissionAll,
 	}
 	cmdHandler.RegisterCommand(getAgendaCommand)
-
+	fetchFileCommand := Command{Keyword: "fetch",
+		Handler:    fetchFile,
+		Permission: PermissionMembers,
+	}
+	cmdHandler.RegisterCommand(fetchFileCommand)
+	
 	return dg, nil
 }
 
@@ -250,9 +260,18 @@ func onboardGroup(s *discordgo.Session, m *discordgo.MessageCreate, r ...string)
 
 // Return a link to the agenda for the next meeting
 func getAgenda(s *discordgo.Session, m *discordgo.MessageCreate) {
-	message := gdrive.FetchAgenda(global.DriveClient)
+	message := gdrive.FetchAgenda()
 	if _, err := s.ChannelMessageSend(m.ChannelID, message); err != nil {
 		fmt.Println("error sending agenda message,", err)
+	}
+}
+
+// Return a link to requested file
+func fetchFile(s *discordgo.Session, m *discordgo.MessageCreate) {
+	fileName := strings.Fields(m.Content)[1]
+	message := gdrive.FetchFile(fileName)
+	if _, err := s.ChannelMessageSend(m.ChannelID, message); err != nil {
+		fmt.Println("error sending file message,", err)
 	}
 }
 
