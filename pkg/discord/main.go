@@ -34,15 +34,25 @@ func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *dis
 	if command, exists := c.Commands[key]; exists {
 		switch command.Permission {
 		case PermissionMembers:
-			member, err := s.GuildMember(m.GuildID, m.Author.ID)
-			if err != nil {
+			if channel, err := s.Channel(m.ChannelID); err != nil {
 				return err
-			}
-			if contains(member.Roles, global.MemberRole) {
-				command.Handler(s, m)
 			} else {
-				if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
-					fmt.Println("error sending permissions message,", err)
+				if channel.Type == discordgo.ChannelTypeGuildText {
+					member, err := s.GuildMember(m.GuildID, m.Author.ID)
+					if err != nil {
+						return err
+					}
+					if contains(member.Roles, global.MemberRole) {
+						command.Handler(s, m)
+					} else {
+						if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+							fmt.Println("error sending permissions message,", err)
+						}
+					}
+				} else {
+					if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
+						fmt.Println("error sending permissions message,", err)
+					}
 				}
 			}
 		case PermissionDM:
