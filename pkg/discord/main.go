@@ -17,9 +17,21 @@ const (
 	PermissionChannel
 )
 
+type MessageData struct {
+	ChannelID string
+	GuildID   string
+	Author    *discordgo.User
+}
+
+type CommandData struct {
+	Session *discordgo.Session
+	MessageData
+	Args []string
+}
+
 type Command struct {
 	Keyword    string
-	Handler    func(s *discordgo.Session, m *discordgo.MessageCreate)
+	Handler    func(CommandData)
 	Permission Permission
 }
 
@@ -30,7 +42,21 @@ type CommandHandler struct {
 var cmdHandler CommandHandler
 
 // Dispatch a command, checking permissions first
-func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *discordgo.MessageCreate) error {
+func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *discordgo.MessageCreate) error {
+	key := args[0]
+	if len(args) > 1 {
+		args = args[1:]
+	}
+	msgData := MessageData{
+		ChannelID: m.ChannelID,
+		GuildID:   m.GuildID,
+		Author:    m.Author,
+	}
+	cmdData := CommandData{
+		Session:     s,
+		MessageData: msgData,
+		Args:        args,
+	}
 	if command, exists := c.Commands[key]; exists {
 		switch command.Permission {
 		case PermissionMembers:
@@ -43,7 +69,7 @@ func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *dis
 						return err
 					}
 					if contains(member.Roles, global.MemberRole) {
-						command.Handler(s, m)
+						command.Handler(cmdData)
 					} else {
 						if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
 							fmt.Println("error sending permissions message,", err)
@@ -61,7 +87,7 @@ func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *dis
 				return err
 			}
 			if channel.Type == discordgo.ChannelTypeDM || channel.Type == discordgo.ChannelTypeGroupDM {
-				command.Handler(s, m)
+				command.Handler(cmdData)
 			} else {
 				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a DM"); err != nil {
 					fmt.Println("error sending permissions message,", err)
@@ -73,14 +99,14 @@ func (c CommandHandler) DispatchCommand(key string, s *discordgo.Session, m *dis
 				return err
 			}
 			if channel.Type == discordgo.ChannelTypeGuildText {
-				command.Handler(s, m)
+				command.Handler(cmdData)
 			} else {
 				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
 					fmt.Println("error sending permissions message,", err)
 				}
 			}
 		case PermissionAll:
-			command.Handler(s, m)
+			command.Handler(cmdData)
 		}
 		return nil
 	} else {
@@ -106,26 +132,40 @@ func Create() (*discordgo.Session, error) {
 
 	cmdHandler.Commands = make(map[string]Command)
 
-	onboardCommand := Command{Keyword: "onboard",
+	onboardCommand := Command{
+		Keyword:    "onboard",
 		Handler:    onboard,
 		Permission: PermissionMembers,
 	}
 	cmdHandler.RegisterCommand(onboardCommand)
-	onboardAllCommand := Command{Keyword: "onboardall",
+	onboardAllCommand := Command{
+		Keyword:    "onboardall",
 		Handler:    onboardAll,
 		Permission: PermissionMembers,
 	}
 	cmdHandler.RegisterCommand(onboardAllCommand)
-	getAgendaCommand := Command{Keyword: "agenda",
+	getAgendaCommand := Command{
+		Keyword:    "agenda",
 		Handler:    getAgenda,
 		Permission: PermissionAll,
 	}
 	cmdHandler.RegisterCommand(getAgendaCommand)
-	fetchFileCommand := Command{Keyword: "fetch",
+	fetchFileCommand := Command{
+		Keyword:    "fetch",
 		Handler:    fetchFile,
 		Permission: PermissionMembers,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
+	joinCommand := Command{
+		Keyword:    "join",
+		Handler:    joinProject,
+		Permission: PermissionMembers,}
+	cmdHandler.RegisterCommand(joinCommand)
+	leaveCommand := Command{
+		Keyword:    "leave",
+		Handler:    leaveProject,
+		Permission: PermissionMembers,}
+	cmdHandler.RegisterCommand(leaveCommand)
 
 	return dg, nil
 }
@@ -199,8 +239,8 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		}
 		commandText := strings.TrimPrefix(m.Content, "!")
-		commandName := strings.ToLower(strings.Split(commandText, " ")[0])
-		err := cmdHandler.DispatchCommand(commandName, s, m)
+		args := strings.Fields(commandText)
+		err := cmdHandler.DispatchCommand(args, s, m)
 		if err != nil {
 			fmt.Println("error dispatching command", err)
 		}
@@ -208,18 +248,18 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 // Onboard members with the onboarding role.
-func onboard(s *discordgo.Session, m *discordgo.MessageCreate) {
-	onboardGroup(s, m, global.OnboardingRole)
+func onboard(data CommandData) {
+	onboardGroup(data.Session, data.MessageData, global.OnboardingRole)
 }
 
 // Onboard members with the onboarding or new member role.
-func onboardAll(s *discordgo.Session, m *discordgo.MessageCreate) {
-	onboardGroup(s, m, global.OnboardingRole, global.NewRole)
+func onboardAll(data CommandData) {
+	onboardGroup(data.Session, data.MessageData, global.OnboardingRole, global.NewRole)
 }
 
 // Give users with the onboarding and/or new member role the full member role
-func onboardGroup(s *discordgo.Session, m *discordgo.MessageCreate, r ...string) {
-	guildID := m.GuildID
+func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
+	guildID := msgData.GuildID
 	guild, err := s.Guild(guildID)
 	if err != nil {
 		fmt.Println("error fetching guild,", err)
@@ -266,26 +306,58 @@ func onboardGroup(s *discordgo.Session, m *discordgo.MessageCreate, r ...string)
 	} else {
 		confirmMessageContent = "No users to onboard"
 	}
-	if _, err = s.ChannelMessageSend(m.ChannelID, confirmMessageContent); err != nil {
+	if _, err = s.ChannelMessageSend(msgData.ChannelID, confirmMessageContent); err != nil {
 		fmt.Println("error sending onboarding confirmation message,", err)
 	}
 
 }
 
 // Return a link to the agenda for the next meeting
-func getAgenda(s *discordgo.Session, m *discordgo.MessageCreate) {
+func getAgenda(data CommandData) {
 	message := gdrive.FetchAgenda()
-	if _, err := s.ChannelMessageSend(m.ChannelID, message); err != nil {
+	if _, err := data.Session.ChannelMessageSend(data.MessageData.ChannelID, message); err != nil {
 		fmt.Println("error sending agenda message,", err)
 	}
 }
 
 // Return a link to requested file
-func fetchFile(s *discordgo.Session, m *discordgo.MessageCreate) {
-	fileName := strings.Fields(m.Content)[1]
+func fetchFile(data CommandData) {
+	fileName := data.Args[0]
 	message := gdrive.FetchFile(fileName)
-	if _, err := s.ChannelMessageSend(m.ChannelID, message); err != nil {
+	if _, err := data.Session.ChannelMessageSend(data.MessageData.ChannelID, message); err != nil {
 		fmt.Println("error sending file message,", err)
+	}
+}
+
+// Add user to project
+func joinProject(data CommandData) {
+	projectName := data.Args[0]
+	if roles, err := data.Session.GuildRoles(data.MessageData.GuildID); err != nil {
+		fmt.Println("error fetching guild roles,", err)
+	} else {
+		for _, role := range roles {
+			if strings.HasPrefix(role.Name, projectName) {
+				if err := data.Session.GuildMemberRoleAdd(data.MessageData.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
+					fmt.Println("error adding member role,", err)
+				}
+			}
+		}
+	}
+}
+
+// Remove user from project
+func leaveProject(data CommandData) {
+	projectName := data.Args[0]
+	if roles, err := data.Session.GuildRoles(data.MessageData.GuildID); err != nil {
+		fmt.Println("error fetching guild roles,", err)
+	} else {
+		for _, role := range roles {
+			if strings.HasPrefix(role.Name, projectName) {
+				if err := data.Session.GuildMemberRoleRemove(data.MessageData.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
+					fmt.Println("error adding member role,", err)
+				}
+			}
+		}
 	}
 }
 
