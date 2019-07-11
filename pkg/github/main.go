@@ -12,6 +12,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"sort"
 )
 
 type Repository struct {
@@ -74,12 +75,18 @@ func handleRepositoryCreate(repo Repository) {
 		Type:     discordgo.ChannelTypeGuildText,
 		ParentID: global.ProjectCategoryId,
 	}
-	_, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData)
-	if err != nil {
+	if _, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData); err != nil {
 		fmt.Println("error creating text channel for new project,", err)
-		return
+	} else if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
+		fmt.Println("error fetching guild text channels,", err)
+	} else {
+		sort.Slice(channels, func(i, j int) bool {
+			return channels[i].Name < channels[j].Name
+		})
+		if err := global.DiscordClient.GuildChannelsReorder(global.DiscordGuildId, channels); err != nil {
+			fmt.Println("error reordering guild text channels,", err)
+		}
 	}
-
 	//Create Github team
 	privacy := "closed"
 	newTeam := github.NewTeam{
