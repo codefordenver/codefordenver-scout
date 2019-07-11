@@ -80,9 +80,18 @@ func handleRepositoryCreate(repo Repository) {
 	} else if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
 		fmt.Println("error fetching guild text channels,", err)
 	} else {
-		sort.Slice(channels, func(i, j int) bool {
-			return channels[i].Name < channels[j].Name
+		projectChannels := make([]*discordgo.Channel, 0)
+		for _, channel := range channels {
+			if channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == global.ProjectCategoryId {
+				projectChannels = append(projectChannels, channel)
+			}
+		}
+		sort.Slice(projectChannels, func(i, j int) bool {
+			return projectChannels[i].Name < projectChannels[j].Name
 		})
+		for i, projectChannel := range projectChannels {
+			projectChannel.Position = i
+		}
 		if err := global.DiscordClient.GuildChannelsReorder(global.DiscordGuildId, channels); err != nil {
 			fmt.Println("error reordering guild text channels,", err)
 		}
