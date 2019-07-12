@@ -2,6 +2,7 @@ package github
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/bradleyfalzon/ghinstallation"
@@ -10,6 +11,7 @@ import (
 	"github.com/google/go-github/github"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -27,7 +29,13 @@ type RepositoryEvent struct {
 
 func Create() (*github.Client, error) {
 	tr := http.DefaultTransport
-	itr, err := ghinstallation.NewKeyFromFile(tr, 31388, 1101679, global.PrivateKeyDir+"cfd-scout.2019-05-23.private-key.pem")
+	credsEnv := os.Getenv("GITHUB_CREDS")
+	creds, err := base64.StdEncoding.DecodeString(credsEnv)
+	if err != nil {
+		fmt.Println("error reading Drive client secret file,", err)
+		return nil, err
+	}
+	itr, err := ghinstallation.New(tr, 31388, 1101679, creds)
 	if err != nil {
 		fmt.Println("error creating github key", err)
 		return nil, err

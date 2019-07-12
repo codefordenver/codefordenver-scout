@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/scout/global"
 	"github.com/codefordenver/scout/pkg/discord"
 	"github.com/codefordenver/scout/pkg/gdrive"
@@ -25,7 +24,6 @@ func init() {
 	global.CodeOfConductMessageID = os.Getenv("CODE_OF_CONDUCT_MESSAGE_ID")
 	global.AgendaFolderID = os.Getenv("AGENDA_FOLDER_ID")
 	global.LocationString = os.Getenv("SCOUT_LOCATION_STRING")
-	global.PrivateKeyDir = os.Getenv("SCOUT_PRIVATE_KEY_DIR")
 	global.DiscordGuildId = os.Getenv("DISCORD_GUILD_ID")
 	global.ProjectCategoryId = os.Getenv("PROJECT_CATEGORY_ID")
 }
@@ -40,7 +38,7 @@ func main() {
 
 	global.GithubClient, err = github.Create()
 
-	global.DiscordClient, err = discordgo.New("Bot " + global.Token)
+	global.DiscordClient, err = discord.Create()
 	if err != nil {
 		fmt.Println("error creating Discord session,", err)
 		return
