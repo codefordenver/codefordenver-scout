@@ -14,6 +14,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"time"
 )
@@ -77,8 +78,6 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 
 // Chore tasks for creating a repository
 func handleRepositoryCreate(repo Repository) {
-	//Create Discord text channel
-
 	// Create Discord roles
 	color := noire.NewRGB(float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)))
 	colorInt := int(color.Red)
@@ -162,6 +161,11 @@ func handleRepositoryCreate(repo Repository) {
 		Name:     repo.Name + "-github",
 		Type:     discordgo.ChannelTypeGuildText,
 		ParentID: global.ProjectCategoryId,
+		PermissionOverwrites: []*discordgo.PermissionOverwrite{
+			&projectChampionOverwrite,
+			&projectOverwrite,
+			&everyoneOverwrite,
+		},
 	}
 	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, githubChannelCreateData); err != nil {
 		fmt.Println("error creating github channel for new project,", err)
@@ -184,6 +188,26 @@ func handleRepositoryCreate(repo Repository) {
 			if err != nil {
 				fmt.Println("error creating Github webhook,", err)
 			}
+		}
+	}
+
+	if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
+		fmt.Println("error fetching guild text channels,", err)
+	} else {
+		projectChannels := make([]*discordgo.Channel, 0)
+		for _, channel := range channels {
+			if channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == global.ProjectCategoryId {
+				projectChannels = append(projectChannels, channel)
+			}
+		}
+		sort.Slice(projectChannels, func(i, j int) bool {
+			return projectChannels[i].Name < projectChannels[j].Name
+		})
+		for i, projectChannel := range projectChannels {
+			projectChannel.Position = i
+		}
+		if err := global.DiscordClient.GuildChannelsReorder(global.DiscordGuildId, channels); err != nil {
+			fmt.Println("error reordering guild text channels,", err)
 		}
 	}
 
@@ -210,7 +234,7 @@ func handleRepositoryDelete(repo Repository) {
 		fmt.Println("error fetching Discord roles")
 	} else {
 		for _, role := range roles {
-			if role.Name == repo.Name || role.Name == repo.Name + "-champion"{
+			if role.Name == repo.Name || role.Name == repo.Name+"-champion" {
 				if err = global.DiscordClient.GuildRoleDelete(global.DiscordGuildId, role.ID); err != nil {
 					fmt.Println("error deleting role for deleted project,", err)
 				}
