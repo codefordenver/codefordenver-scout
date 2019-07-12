@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-github/github"
 	"io/ioutil"
 	"net/http"
+	"strings"
 )
 
 type Repository struct {
@@ -60,7 +61,7 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRepositoryCreate(repo Repository) {
-	//Create Discord channel
+	//Create Discord text channel
 	channelCreateData := discordgo.GuildChannelCreateData{
 		Name:     repo.Name,
 		Type:     discordgo.ChannelTypeGuildText,
@@ -80,7 +81,37 @@ func handleRepositoryCreate(repo Repository) {
 			githubHook := github.Hook{
 				Name:   &githubHookName,
 				Config: githubHookConfig,
-				Events: []string{"push", "issues"},
+				Events: []string{"issues"},
+			}
+
+			_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+			if err != nil {
+				fmt.Println("error creating Github webhook,", err)
+			}
+		}
+	}
+
+	//Create Discord github channel
+	githubChannelCreateData := discordgo.GuildChannelCreateData{
+		Name:     repo.Name + "-github",
+		Type:     discordgo.ChannelTypeGuildText,
+		ParentID: global.ProjectCategoryId,
+	}
+	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, githubChannelCreateData); err != nil {
+		fmt.Println("error creating github channel for new project,", err)
+	} else {
+		if discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
+			fmt.Println("error creating github webhook for github channel,", err)
+		} else {
+			discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
+			githubHookName := "web"
+			githubHookConfig := make(map[string]interface{})
+			githubHookConfig["content_type"] = "json"
+			githubHookConfig["url"] = discordWebhookURL
+			githubHook := github.Hook{
+				Name:   &githubHookName,
+				Config: githubHookConfig,
+				Events: []string{"push"},
 			}
 
 			_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
@@ -111,11 +142,10 @@ func handleRepositoryDelete(repo Repository) {
 		fmt.Println("error fetching Discord guild,", err)
 	} else {
 		for _, channel := range channels {
-			if channel.Name == repo.Name {
+			if strings.HasPrefix(channel.Name, repo.Name) {
 				if _, err = global.DiscordClient.ChannelDelete(channel.ID); err != nil {
 					fmt.Println("error deleting text channel for deleted project,", err)
 				}
-				break
 			}
 		}
 	}
