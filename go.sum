@@ -26,6 +26,8 @@ github.com/hashicorp/golang-lru v0.5.0 h1:CL2msUPvZTLb5O648aiLNJw3hnBxN2+1Jq8rCO
 github.com/hashicorp/golang-lru v0.5.0/go.mod h1:/m3WP610KZHVQ1SGc6re/UDhFvYD7pJ4Ao+sR/qLZy8=
 github.com/rickar/cal v1.0.1 h1:Tyjkk4sBvVC3gcXCgLowEM53R2eVfFcoi1gtQuocrmk=
 github.com/rickar/cal v1.0.1/go.mod h1:3GBx8OBrvh4/y/JTxM0e1bUUIHMnqILl1rMANHWExxQ=
+github.com/teacat/noire v1.0.0 h1:+s/oXhDE+HuBUgObpjO3dHEPupo5yiLiUg+7/R6FmYk=
+github.com/teacat/noire v1.0.0/go.mod h1:7FDkAv8Eaxqg/9rbSgACb/fVNsTM9khy+rFC6pcnXEE=
 go.opencensus.io v0.21.0 h1:mU6zScU4U1YAFPHEHYk+3JC4SY7JxgkqS10ZOSyksNg=
 go.opencensus.io v0.21.0/go.mod h1:mSImk1erAIZhrmZN+AvHh14ztQfjbGwt4TtuofqLduU=
 golang.org/x/crypto v0.0.0-20181030102418-4d3f4d9ffa16/go.mod h1:6SG95UA2DQfeDnfUPMdvaQW0Q7yPrPDi9nlGo2tz2b4=
