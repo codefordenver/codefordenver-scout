@@ -9,10 +9,13 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/scout/global"
 	"github.com/google/go-github/github"
+	"github.com/teacat/noire"
 	"io/ioutil"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 type Repository struct {
@@ -27,7 +30,11 @@ type RepositoryEvent struct {
 	EventRepository Repository `json:"repository"`
 }
 
+var colorGenerator *rand.Rand
+
 func Create() (*github.Client, error) {
+	colorGenerator = rand.New(rand.NewSource(time.Now().UnixNano()))
+
 	tr := http.DefaultTransport
 	credsEnv := os.Getenv("GITHUB_CREDS")
 	creds, err := base64.StdEncoding.DecodeString(credsEnv)
@@ -68,12 +75,63 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// Chore tasks for creating a repository
 func handleRepositoryCreate(repo Repository) {
 	//Create Discord text channel
+
+	// Create Discord roles
+	color := noire.NewRGB(float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)))
+	colorInt := int(color.Red)
+	colorInt = (colorInt << 8) + int(color.Green)
+	colorInt = (colorInt << 8) + int(color.Blue)
+	championRole, err := global.DiscordClient.GuildRoleCreate(global.DiscordGuildId)
+	if err != nil {
+		fmt.Println("error creating role for new project,", err)
+	} else {
+		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
+		if _, err = global.DiscordClient.GuildRoleEdit(global.DiscordGuildId, championRole.ID, repo.Name+"-champion", colorInt, false, rolePermission, true); err != nil {
+			fmt.Println("error editing role for new project,", err)
+		}
+	}
+	projectRole, err := global.DiscordClient.GuildRoleCreate(global.DiscordGuildId)
+	if err != nil {
+		fmt.Println("error creating role for new project,", err)
+	} else {
+		color = color.Lighten(.25)
+		colorInt := int(color.Red)
+		colorInt = (colorInt << 8) + int(color.Green)
+		colorInt = (colorInt << 8) + int(color.Blue)
+		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
+		if _, err = global.DiscordClient.GuildRoleEdit(global.DiscordGuildId, projectRole.ID, repo.Name, colorInt, false, rolePermission, true); err != nil {
+			fmt.Println("error editing role for new project,", err)
+		}
+	}
+
+	// Create Discord channel
+	projectChampionOverwrite := discordgo.PermissionOverwrite{
+		ID:    championRole.ID,
+		Type:  "role",
+		Allow: discordgo.PermissionReadMessages,
+	}
+	projectOverwrite := discordgo.PermissionOverwrite{
+		ID:    projectRole.ID,
+		Type:  "role",
+		Allow: discordgo.PermissionReadMessages,
+	}
+	everyoneOverwrite := discordgo.PermissionOverwrite{
+		ID:   global.EveryoneRole[global.DiscordGuildId],
+		Type: "role",
+		Deny: discordgo.PermissionReadMessages,
+	}
 	channelCreateData := discordgo.GuildChannelCreateData{
 		Name:     repo.Name,
 		Type:     discordgo.ChannelTypeGuildText,
 		ParentID: global.ProjectCategoryId,
+		PermissionOverwrites: []*discordgo.PermissionOverwrite{
+			&projectChampionOverwrite,
+			&projectOverwrite,
+			&everyoneOverwrite,
+		},
 	}
 	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData); err != nil {
 		fmt.Println("error creating text channel for new project,", err)
@@ -129,7 +187,7 @@ func handleRepositoryCreate(repo Repository) {
 		}
 	}
 
-	//Create Github team
+	// Create Github team
 	privacy := "closed"
 	newTeam := github.NewTeam{
 		Name:    repo.Name,
@@ -145,9 +203,24 @@ func handleRepositoryCreate(repo Repository) {
 	}
 }
 
+// Chore tasks for deleting a repository
 func handleRepositoryDelete(repo Repository) {
+	// Delete Discord role
+	if roles, err := global.DiscordClient.GuildRoles(global.DiscordGuildId); err != nil {
+		fmt.Println("error fetching Discord roles")
+	} else {
+		for _, role := range roles {
+			if role.Name == repo.Name || role.Name == repo.Name + "-champion"{
+				if err = global.DiscordClient.GuildRoleDelete(global.DiscordGuildId, role.ID); err != nil {
+					fmt.Println("error deleting role for deleted project,", err)
+				}
+			}
+		}
+	}
+
+	// Delete Discord channel
 	if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
-		fmt.Println("error fetching Discord guild,", err)
+		fmt.Println("error fetching Discord channels,", err)
 	} else {
 		for _, channel := range channels {
 			if strings.HasPrefix(channel.Name, repo.Name) {
@@ -157,6 +230,8 @@ func handleRepositoryDelete(repo Repository) {
 			}
 		}
 	}
+
+	// Delete Github team
 	nextPage := 0
 	for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
 		opt := github.ListOptions{
