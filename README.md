@@ -8,6 +8,7 @@ Commands:
 - `!onboardall` - Converts all users with new or onboarding role to member role
 - `!onboard` - Converts all users with onboarding role to member role
 - `!agenda` - Fetches the agenda for the next meeting, or creates and returns it if it does not exist
+- `!fetch [file name]` - Fetches a file specified in the config
 ## Development
 ### Setup
 Install:
@@ -29,6 +30,7 @@ GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
 DISCORD_GUILD_ID
 PROJECT_CATEGORY_ID
+SCOUT_FILES=Mappings of file name and file IDs for fetch
 ```
 Get these values from a current project member
 
