@@ -66,31 +66,28 @@ func handleRepositoryCreate(repo Repository) {
 		Type:     discordgo.ChannelTypeGuildText,
 		ParentID: global.ProjectCategoryId,
 	}
-	textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData)
-	if err != nil {
+	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData); err != nil {
 		fmt.Println("error creating text channel for new project,", err)
-		return
-	}
+	} else {
+		if discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
+			fmt.Println("error creating github webhook for text channel,", err)
+		} else {
+			discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
+			githubHookName := "web"
+			githubHookConfig := make(map[string]interface{})
+			githubHookConfig["content_type"] = "json"
+			githubHookConfig["url"] = discordWebhookURL
+			githubHook := github.Hook{
+				Name:   &githubHookName,
+				Config: githubHookConfig,
+				Events: []string{"push", "issues"},
+			}
 
-	discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", "")
-	if err != nil {
-		fmt.Println("error creating github webhook for text channel,", err)
-	}
-
-	discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
-	githubHookName := "web"
-	githubHookConfig := make(map[string]interface{})
-	githubHookConfig["content_type"] = "json"
-	githubHookConfig["url"] = discordWebhookURL
-	githubHook := github.Hook{
-		Name:   &githubHookName,
-		Config: githubHookConfig,
-		Events: []string{"push", "issues"},
-	}
-
-	_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
-	if err != nil {
-		fmt.Println("error creating Github webhook,", err)
+			_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+			if err != nil {
+				fmt.Println("error creating Github webhook,", err)
+			}
+		}
 	}
 
 	//Create Github team
@@ -99,16 +96,13 @@ func handleRepositoryCreate(repo Repository) {
 		Name:    repo.Name,
 		Privacy: &privacy,
 	}
-	team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam)
-	if err != nil {
+	if team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam); err != nil {
 		fmt.Println("error creating github team for new project,", err)
-		return
-	}
-
-	options := github.TeamAddTeamRepoOptions{Permission: "push"}
-	if _, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
-		fmt.Println("error adding repository to team,", err)
-		return
+	} else {
+		options := github.TeamAddTeamRepoOptions{Permission: "push"}
+		if _, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
+			fmt.Println("error adding repository to team,", err)
+		}
 	}
 }
 
