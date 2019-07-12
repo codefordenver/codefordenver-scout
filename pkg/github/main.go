@@ -12,12 +12,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 )
 
 type Repository struct {
 	Name  string `json:"name"`
 	Owner struct {
-		Name string `json:"name"`
+		Name string `json:"login"`
 	} `json:"owner"`
 }
 
@@ -68,16 +69,64 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleRepositoryCreate(repo Repository) {
-	//Create Discord channel
+	//Create Discord text channel
 	channelCreateData := discordgo.GuildChannelCreateData{
 		Name:     repo.Name,
 		Type:     discordgo.ChannelTypeGuildText,
 		ParentID: global.ProjectCategoryId,
 	}
-	_, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData)
-	if err != nil {
+	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, channelCreateData); err != nil {
 		fmt.Println("error creating text channel for new project,", err)
-		return
+	} else {
+		if discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
+			fmt.Println("error creating github webhook for text channel,", err)
+		} else {
+			discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
+			githubHookName := "web"
+			githubHookConfig := make(map[string]interface{})
+			githubHookConfig["content_type"] = "json"
+			githubHookConfig["url"] = discordWebhookURL
+			githubHook := github.Hook{
+				Name:   &githubHookName,
+				Config: githubHookConfig,
+				Events: []string{"issues"},
+			}
+
+			_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+			if err != nil {
+				fmt.Println("error creating Github webhook,", err)
+			}
+		}
+	}
+
+	//Create Discord github channel
+	githubChannelCreateData := discordgo.GuildChannelCreateData{
+		Name:     repo.Name + "-github",
+		Type:     discordgo.ChannelTypeGuildText,
+		ParentID: global.ProjectCategoryId,
+	}
+	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(global.DiscordGuildId, githubChannelCreateData); err != nil {
+		fmt.Println("error creating github channel for new project,", err)
+	} else {
+		if discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
+			fmt.Println("error creating github webhook for github channel,", err)
+		} else {
+			discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
+			githubHookName := "web"
+			githubHookConfig := make(map[string]interface{})
+			githubHookConfig["content_type"] = "json"
+			githubHookConfig["url"] = discordWebhookURL
+			githubHook := github.Hook{
+				Name:   &githubHookName,
+				Config: githubHookConfig,
+				Events: []string{"push"},
+			}
+
+			_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+			if err != nil {
+				fmt.Println("error creating Github webhook,", err)
+			}
+		}
 	}
 
 	//Create Github team
@@ -86,32 +135,49 @@ func handleRepositoryCreate(repo Repository) {
 		Name:    repo.Name,
 		Privacy: &privacy,
 	}
-	team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam)
-	if err != nil {
+	if team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam); err != nil {
 		fmt.Println("error creating github team for new project,", err)
-		return
-	}
-
-	options := github.TeamAddTeamRepoOptions{Permission: "push"}
-	_, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options)
-	if err != nil {
-		fmt.Println("error adding repository to team,", err)
-		return
+	} else {
+		options := github.TeamAddTeamRepoOptions{Permission: "push"}
+		if _, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
+			fmt.Println("error adding repository to team,", err)
+		}
 	}
 }
 
 func handleRepositoryDelete(repo Repository) {
-	channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId)
-	if err != nil {
+	if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
 		fmt.Println("error fetching Discord guild,", err)
-	}
-	for _, channel := range channels {
-		if channel.Name == repo.Name {
-			_, err = global.DiscordClient.ChannelDelete(channel.ID)
-			if err != nil {
-				fmt.Println("error deleting text channel for deleted project,", err)
+	} else {
+		for _, channel := range channels {
+			if strings.HasPrefix(channel.Name, repo.Name) {
+				if _, err = global.DiscordClient.ChannelDelete(channel.ID); err != nil {
+					fmt.Println("error deleting text channel for deleted project,", err)
+				}
 			}
-			return
 		}
 	}
+	nextPage := 0
+	for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
+		opt := github.ListOptions{
+			Page:    nextPage,
+			PerPage: 100,
+		}
+		teams, res, err := global.GithubClient.Teams.ListTeams(context.Background(), repo.Owner.Name, &opt)
+		if err != nil {
+			fmt.Println("error fetching Github team,", err)
+			nextPage = 0
+		} else {
+			nextPage = res.NextPage
+			for _, team := range teams {
+				if *team.Name == repo.Name {
+					if _, err = global.GithubClient.Teams.DeleteTeam(context.Background(), *team.ID); err != nil {
+						fmt.Println("error deleting github team for deleted project,", err)
+					}
+					break
+				}
+			}
+		}
+	}
+
 }
