@@ -194,17 +194,15 @@ func handleRepositoryCreate(repo Repository) {
 	if channels, err := global.DiscordClient.GuildChannels(global.DiscordGuildId); err != nil {
 		fmt.Println("error fetching guild text channels,", err)
 	} else {
-		projectChannels := make([]*discordgo.Channel, 0)
+		sort.Slice(channels, func(i, j int) bool {
+			return channels[i].Name < channels[j].Name
+		})
+		i := 0
 		for _, channel := range channels {
 			if channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == global.ProjectCategoryId {
-				projectChannels = append(projectChannels, channel)
+				channel.Position = i
+				i++
 			}
-		}
-		sort.Slice(projectChannels, func(i, j int) bool {
-			return projectChannels[i].Name < projectChannels[j].Name
-		})
-		for i, projectChannel := range projectChannels {
-			projectChannel.Position = i
 		}
 		if err := global.DiscordClient.GuildChannelsReorder(global.DiscordGuildId, channels); err != nil {
 			fmt.Println("error reordering guild text channels,", err)
@@ -278,5 +276,4 @@ func handleRepositoryDelete(repo Repository) {
 			}
 		}
 	}
-
 }
