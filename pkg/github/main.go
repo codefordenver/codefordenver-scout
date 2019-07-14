@@ -115,3 +115,15 @@ func handleRepositoryDelete(repo Repository) {
 		}
 	}
 }
+
+func CreateIssue(text, repository string) *string {
+	issue := github.IssueRequest{
+		Title: &text,
+	}
+	if _, _, err := global.GithubClient.Issues.Create(context.Background(), global.GithubOrgName, repository, &issue); err != nil {
+		fmt.Println("error creating github issue,", err)
+		msg := "Failed to create issue"
+		return &msg
+	}
+	return nil
+}
