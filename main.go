@@ -40,9 +40,7 @@ func main() {
 		fmt.Println("error parsing configuration file,", err)
 		return
 	}
-
-	fmt.Println(global.Brigades)
-
+	
 	global.DriveClient, err = gdrive.Create()
 	if err != nil {
 		fmt.Println("error creating Google Drive session, ", err)
