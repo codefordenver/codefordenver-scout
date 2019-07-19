@@ -27,6 +27,8 @@ func init() {
 	global.LocationString = os.Getenv("SCOUT_LOCATION_STRING")
 	global.DiscordGuildId = os.Getenv("DISCORD_GUILD_ID")
 	global.ProjectCategoryId = os.Getenv("PROJECT_CATEGORY_ID")
+	global.IssueEmoji = os.Getenv("SCOUT_ISSUE_EMOJI")
+	global.GithubOrgName = os.Getenv("SCOUT_ORG_NAME")
 }
 
 func main() {

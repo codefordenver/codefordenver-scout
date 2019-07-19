@@ -29,6 +29,8 @@ GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
 DISCORD_GUILD_ID
 PROJECT_CATEGORY_ID
+SCOUT_ISSUE_EMOJI
+SCOUT_ORG_NAME
 ```
 Get these values from a current project member
 

@@ -5,6 +5,7 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/scout/global"
 	"github.com/codefordenver/scout/pkg/gdrive"
+	"github.com/codefordenver/scout/pkg/github"
 	"strings"
 )
 
@@ -60,6 +61,21 @@ func UserReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 		} else if err = s.GuildMemberRoleAdd(m.GuildID, m.UserID, global.NewRole); err != nil {
 			fmt.Println("error adding role,", err)
 		}
+		return
+	}
+	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == global.ProjectCategoryId && m.Emoji.Name == global.IssueEmoji {
+		if msg, err := s.ChannelMessage(m.ChannelID, m.MessageID); err != nil {
+			fmt.Println("error fetching message to create issue,", err)
+		} else {
+			errorMessage := github.CreateIssue(msg.Content, channel.Name)
+			if errorMessage != nil {
+				if _, err := s.ChannelMessageSend(m.ChannelID, *errorMessage); err != nil {
+					fmt.Println("error sending issue status,", err)
+				}
+			}
+		}
+	} else if err != nil {
+		fmt.Println("error getting channel to create issue,", err)
 	}
 }
 
