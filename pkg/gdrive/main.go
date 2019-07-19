@@ -11,6 +11,7 @@ import (
 	"google.golang.org/api/option"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -19,6 +20,7 @@ import (
 )
 
 var c *cal.Calendar
+var files map[string]string
 
 func Monday(date time.Time) time.Time {
 	weekdayInt := int(date.Weekday())
@@ -86,6 +88,21 @@ func Create() (*drive.Service, error) {
 	c.WorkdayFunc = isMeetingDay
 
 	cal.AddUsHolidays(c)
+
+	files = make(map[string]string)
+
+	fileMappingString := os.Getenv("SCOUT_FILES")
+
+	fileMappings := strings.Split(fileMappingString, ",")
+
+	for _, fileMapping := range fileMappings {
+		splitFileMapping := strings.Split(fileMapping, ":")
+		if len(splitFileMapping) == 2 {
+			fileName := splitFileMapping[0]
+			fileID := splitFileMapping[1]
+			files[fileName] = fileID
+		}
+	}
 
 	return srv, nil
 }
@@ -169,7 +186,7 @@ func saveToken(path string, token *oauth2.Token) error {
 	return nil
 }
 
-func FetchAgenda(s *drive.Service) string {
+func FetchAgenda() string {
 	location, err := time.LoadLocation(global.LocationString)
 	if err != nil {
 		fmt.Println(err)
@@ -186,7 +203,8 @@ func FetchAgenda(s *drive.Service) string {
 	} else {
 		nextMeetingDate = nextMeetingDate.AddDate(0, 0, c.WorkdayN(date.Year(), date.Month(), c.Workdays(date.Year(), date.Month())-c.WorkdaysRemain(date)+1)-1)
 	}
-	r, err := s.Files.List().Q(fmt.Sprintf("name contains 'Meeting Agenda %s'", nextMeetingDate.Format("2006/01/02"))).OrderBy("modifiedTime desc").PageSize(1).
+
+	r, err := global.DriveClient.Files.List().Q(fmt.Sprintf("name contains 'Meeting Agenda - %s'", nextMeetingDate.Format("2006/01/02"))).OrderBy("modifiedTime desc").PageSize(1).
 		Fields("files(name, webViewLink)").Do()
 	if err != nil {
 		fmt.Println("error fetching files from Drive,", err)
@@ -194,13 +212,13 @@ func FetchAgenda(s *drive.Service) string {
 	}
 	var agenda *drive.File
 	if len(r.Files) == 0 {
-		r, err = s.Files.List().Q(fmt.Sprintf("'%s' in parents", global.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
+		r, err = global.DriveClient.Files.List().Q(fmt.Sprintf("'%s' in parents", global.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
 		if err != nil {
 			fmt.Println("error fetching files from Drive,", err)
 			return "Error fetching files from Google Drive"
 		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
-		agenda, err = s.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
+		agenda, err = global.DriveClient.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
 			fmt.Println("error creating new agenda,", err)
 			return "Error creating new agenda"
@@ -209,4 +227,17 @@ func FetchAgenda(s *drive.Service) string {
 		agenda = r.Files[0]
 	}
 	return fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink)
+}
+
+func FetchFile(name string) string {
+	if fileID, exists := files[name]; exists {
+		r, err := global.DriveClient.Files.Get(fileID).Fields("name, webViewLink").Do()
+		if err != nil {
+			fmt.Println("error fetching file from Drive,", err)
+			return "Error fetching requested file from google drive"
+		}
+		return fmt.Sprintf("%s - %s", r.Name, r.WebViewLink)
+	} else {
+		return "The requested file does not exist"
+	}
 }

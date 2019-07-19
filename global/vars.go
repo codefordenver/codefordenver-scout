@@ -11,6 +11,7 @@ var (
 	NewRole                string
 	OnboardingRole         string
 	MemberRole             string
+	EveryoneRole           = make(map[string]string, 0)
 	OnboardingInviteCode   string
 	CodeOfConductMessageID string
 	AgendaFolderID         string
