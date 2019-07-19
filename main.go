@@ -7,6 +7,8 @@ import (
 	"github.com/codefordenver/scout/pkg/discord"
 	"github.com/codefordenver/scout/pkg/gdrive"
 	"github.com/codefordenver/scout/pkg/github"
+	"gopkg.in/yaml.v2"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -16,20 +18,31 @@ import (
 )
 
 func init() {
-	global.Token = os.Getenv("SCOUT_TOKEN")
-	global.NewRole = os.Getenv("NEW_ROLE")
-	global.OnboardingRole = os.Getenv("ONBOARDING_ROLE")
-	global.MemberRole = os.Getenv("MEMBER_ROLE")
-	global.OnboardingInviteCode = os.Getenv("ONBOARDING_INVITE_CODE")
-	global.CodeOfConductMessageID = os.Getenv("CODE_OF_CONDUCT_MESSAGE_ID")
-	global.AgendaFolderID = os.Getenv("AGENDA_FOLDER_ID")
 	global.LocationString = os.Getenv("SCOUT_LOCATION_STRING")
-	global.DiscordGuildId = os.Getenv("DISCORD_GUILD_ID")
-	global.ProjectCategoryId = os.Getenv("PROJECT_CATEGORY_ID")
 }
 
 func main() {
-	var err error
+
+	f, err := os.Open("config.yaml")
+	if err != nil {
+		fmt.Println("error opening configuration file", err)
+		return
+	}
+	defer f.Close()
+
+	var bytes []byte
+
+	if bytes, err = ioutil.ReadAll(f); err != nil {
+		fmt.Println("error reading configuration file,", err)
+	}
+
+	if err = yaml.Unmarshal(bytes, &global.Brigades); err != nil {
+		fmt.Println("error parsing configuration file,", err)
+		return
+	}
+
+	fmt.Println(global.Brigades)
+
 	global.DriveClient, err = gdrive.Create()
 	if err != nil {
 		fmt.Println("error creating Google Drive session, ", err)
@@ -53,7 +66,6 @@ func main() {
 	if err != nil {
 		fmt.Println("error opening connection,", err)
 		return
-
 	}
 
 	port := os.Getenv("PORT")

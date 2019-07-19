@@ -18,19 +18,10 @@ Install:
 Set environment variables:
 ```
 SCOUT_TOKEN=discord bot token
-NEW_ROLE=
-ONBOARDING_ROLE=
-MEMBER_ROLE=
-ONBOARDING_INVITE_CODE=
-CODE_OF_CONDUCT_MESSAGE_ID=
-AGENDA_FOLDER_ID=
-SCOUT_LOCATION_STRING=
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
-DISCORD_GUILD_ID
-PROJECT_CATEGORY_ID
-SCOUT_FILES=Mappings of file name and file IDs for fetch
+SCOUT_LOCATION_STRING=
 ```
 Get these values from a current project member
 
