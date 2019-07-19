@@ -19,6 +19,8 @@ var (
 	PrivateKeyDir          string
 	DiscordGuildId         string
 	ProjectCategoryId      string
+	IssueEmoji             string
+	GithubOrgName          string
 	InviteCount            = make(map[string]int, 0)
 	DriveClient            *drive.Service
 	GithubClient           *github.Client
