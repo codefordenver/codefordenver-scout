@@ -5,8 +5,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/scout/global"
 	"github.com/codefordenver/scout/pkg/gdrive"
-	"os"
 	"github.com/codefordenver/scout/pkg/github"
+	"os"
 	"strings"
 )
 
@@ -234,11 +234,11 @@ func UserReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 		}
 		return
 	}
-	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == global.ProjectCategoryId && m.Emoji.Name == global.IssueEmoji {
+	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == brigades[m.GuildID].ProjectCategoryID && m.Emoji.Name == brigades[m.GuildID].IssueEmoji {
 		if msg, err := s.ChannelMessage(m.ChannelID, m.MessageID); err != nil {
 			fmt.Println("error fetching message to create issue,", err)
 		} else {
-			errorMessage := github.CreateIssue(msg.Content, channel.Name)
+			errorMessage := github.CreateIssue(msg.Content, channel.Name, brigades[m.GuildID])
 			if errorMessage != nil {
 				if _, err := s.ChannelMessageSend(m.ChannelID, *errorMessage); err != nil {
 					fmt.Println("error sending issue status,", err)
@@ -378,7 +378,7 @@ func leaveProject(data CommandData) {
 	} else {
 		for _, role := range roles {
 			if strings.HasPrefix(role.Name, projectName) {
-				if err := data.Session.GuildMemberRoleRemove(data.GuildID, data.Author.ID, role.ID); err != nil {
+				if err := data.Session.GuildMemberRoleRemove(data.MessageData.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
 					fmt.Println("error adding member role,", err)
 				}
 			}
