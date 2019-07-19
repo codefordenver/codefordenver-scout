@@ -61,7 +61,9 @@ func UserReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 		} else if err = s.GuildMemberRoleAdd(m.GuildID, m.UserID, global.NewRole); err != nil {
 			fmt.Println("error adding role,", err)
 		}
-	} else if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == global.ProjectCategoryId && m.Emoji.Name == global.IssueEmoji {
+		return
+	}
+	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == global.ProjectCategoryId && m.Emoji.Name == global.IssueEmoji {
 		if msg, err := s.ChannelMessage(m.ChannelID, m.MessageID); err != nil {
 			fmt.Println("error fetching message to create issue,", err)
 		} else {
