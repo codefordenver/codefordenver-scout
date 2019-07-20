@@ -2,13 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"github.com/codefordenver/scout/global"
 	"github.com/codefordenver/scout/pkg/discord"
 	"github.com/codefordenver/scout/pkg/gdrive"
 	"github.com/codefordenver/scout/pkg/github"
 	"gopkg.in/yaml.v2"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -23,27 +23,24 @@ func init() {
 
 func main() {
 
-	f, err := os.Open("config.yaml")
+	encodedConfig := os.Getenv("SCOUT_CONFIG")
+	if encodedConfig == "" {
+		log.Fatal("configuration environment variable is empty or does not exist")
+	}
+	config, err := base64.StdEncoding.DecodeString(encodedConfig)
 	if err != nil {
-		fmt.Println("error opening configuration file", err)
+		log.Fatal("error decoding configuration string", err)
 		return
 	}
-	defer f.Close()
 
-	var bytes []byte
-
-	if bytes, err = ioutil.ReadAll(f); err != nil {
-		fmt.Println("error reading configuration file,", err)
-	}
-
-	if err = yaml.Unmarshal(bytes, &global.Brigades); err != nil {
-		fmt.Println("error parsing configuration file,", err)
+	if err = yaml.Unmarshal(config, &global.Brigades); err != nil {
+		log.Fatal("error parsing configuration file,", err)
 		return
 	}
 	
 	global.DriveClient, err = gdrive.Create()
 	if err != nil {
-		fmt.Println("error creating Google Drive session, ", err)
+		log.Fatal("error creating Google Drive session, ", err)
 		return
 	}
 
@@ -51,7 +48,7 @@ func main() {
 
 	global.DiscordClient, err = discord.Create()
 	if err != nil {
-		fmt.Println("error creating Discord session,", err)
+		log.Fatal("error creating Discord session,", err)
 		return
 	}
 
@@ -62,7 +59,7 @@ func main() {
 
 	err = global.DiscordClient.Open()
 	if err != nil {
-		fmt.Println("error opening connection,", err)
+		log.Fatal("error opening connection,", err)
 		return
 	}
 
@@ -77,7 +74,7 @@ func main() {
 	go func() {
 		err := server.ListenAndServe()
 		if err != nil {
-			log.Println("error starting github webhook,", err)
+			log.Fatal("error starting github webhook,", err)
 		}
 	}()
 
