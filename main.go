@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"github.com/codefordenver/scout/global"
 	"github.com/codefordenver/scout/pkg/discord"
 	"github.com/codefordenver/scout/pkg/gdrive"
 	"github.com/codefordenver/scout/pkg/github"
+	"go.mozilla.org/sops/decrypt"
 	"gopkg.in/yaml.v2"
 	"log"
 	"net/http"
@@ -17,27 +17,30 @@ import (
 	"time"
 )
 
+type Brigades struct {
+	Brigades []global.Brigade `yaml:"Brigades"`
+}
+
 func init() {
 	global.LocationString = os.Getenv("SCOUT_LOCATION_STRING")
 }
 
 func main() {
-
-	encodedConfig := os.Getenv("SCOUT_CONFIG")
-	if encodedConfig == "" {
-		log.Fatal("configuration environment variable is empty or does not exist")
-	}
-	config, err := base64.StdEncoding.DecodeString(encodedConfig)
+	config, err := decrypt.File("config.yaml", "yaml")
 	if err != nil {
-		log.Fatal("error decoding configuration string", err)
+		log.Fatal("error decoding configuration, ", err)
 		return
 	}
 
-	if err = yaml.Unmarshal(config, &global.Brigades); err != nil {
+	var b Brigades
+
+	if err = yaml.Unmarshal(config, &b); err != nil {
 		log.Fatal("error parsing configuration file,", err)
 		return
 	}
-	
+
+	global.Brigades = b.Brigades
+
 	global.DriveClient, err = gdrive.Create()
 	if err != nil {
 		log.Fatal("error creating Google Drive session, ", err)
