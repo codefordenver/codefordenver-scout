@@ -31,7 +31,14 @@ type RepositoryEvent struct {
 	EventRepository Repository `json:"repository"`
 }
 
+type AddMemberData struct {
+	Team  string
+	Owner string
+}
+
 var colorGenerator *rand.Rand
+
+var expectedUsernames map[string]AddMemberData
 
 var brigades map[string]global.Brigade
 
@@ -51,6 +58,8 @@ func Create() (*github.Client, error) {
 		return nil, err
 	}
 	client := github.NewClient(&http.Client{Transport: itr})
+
+	expectedUsernames = make(map[string]AddMemberData, 0)
 
 	brigades = make(map[string]global.Brigade, 0)
 
@@ -286,6 +295,48 @@ func handleRepositoryDelete(repo Repository) {
 	}
 }
 
+// Adds a user to the waitlist(waiting to receive their Github username for team)
+func AddUserToTeamWaitlist(discordUser, owner, team string) {
+	expectedUsernames[discordUser] = AddMemberData{
+		Team:  team,
+		Owner: owner,
+	}
+}
+
+func AddUserToTeam(discordUser, githubName string) string {
+	if teamAddData, ok := expectedUsernames[discordUser]; !ok {
+		return "Wasn't expecting a github username from you! Did you use `!join` yet?"
+	} else {
+		nextPage := 0
+		for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
+			opt := github.ListOptions{
+				Page:    nextPage,
+				PerPage: 100,
+			}
+			teams, res, err := global.GithubClient.Teams.ListTeams(context.Background(), teamAddData.Owner, &opt)
+			if err != nil {
+				fmt.Println("error fetching Github team,", err)
+				nextPage = 0
+			} else {
+				nextPage = res.NextPage
+				for _, team := range teams {
+					if *team.Name == teamAddData.Team {
+						opts := github.TeamAddTeamMembershipOptions{Role: "member"}
+						if _, _, err = global.GithubClient.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
+							fmt.Println("error adding user to github team,", err)
+							return "Failed to add you to the github team `" + teamAddData.Team + "`. Try again later."
+						}
+						delete(expectedUsernames, discordUser)
+						return "You've been added to " + teamAddData.Team
+					}
+				}
+			}
+		}
+		return "Failed to find the github team for `" + teamAddData.Team + "`. Try again later."
+	}
+}
+
+// Creates an issue
 func CreateIssue(text, repository string, brigade *global.Brigade) *string {
 	issue := github.IssueRequest{
 		Title: &text,

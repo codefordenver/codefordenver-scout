@@ -160,6 +160,12 @@ func Create() (*discordgo.Session, error) {
 		Permission: PermissionMembers,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
+	listCommand := Command{
+		Keyword:    "list-projects",
+		Handler:    listProjects,
+		Permission: PermissionChannel,
+	}
+	cmdHandler.RegisterCommand(listCommand)
 	joinCommand := Command{
 		Keyword:    "join",
 		Handler:    joinProject,
@@ -170,6 +176,11 @@ func Create() (*discordgo.Session, error) {
 		Handler:    leaveProject,
 		Permission: PermissionMembers,}
 	cmdHandler.RegisterCommand(leaveCommand)
+	githubCommand := Command{
+		Keyword:    "github",
+		Handler:    sendGithubUsername,
+		Permission: PermissionDM,}
+	cmdHandler.RegisterCommand(githubCommand)
 
 	brigades = make(map[string]*global.Brigade, 0)
 
@@ -354,6 +365,24 @@ func fetchFile(data CommandData) {
 	}
 }
 
+func listProjects(data CommandData) {
+	if channels, err := data.Session.GuildChannels(data.GuildID); err != nil {
+		fmt.Println("error fetching guild channels,", err)
+	} else {
+		projectsMessage := "Current projects at `" + "codefordenver" + "`:"
+		for _, channel := range channels {
+			if channel.ParentID == global.ProjectCategoryId {
+				projectsMessage += "\n" + channel.Name
+			}
+		}
+		if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
+			fmt.Println("error creating DM channel,", err)
+		} else if _, err := data.Session.ChannelMessageSend(channel.ID, projectsMessage); err != nil {
+			fmt.Println("error sending projects list,", err)
+		}
+	}
+}
+
 // Add user to project
 func joinProject(data CommandData) {
 	projectName := data.Args[0]
@@ -366,6 +395,13 @@ func joinProject(data CommandData) {
 					fmt.Println("error adding member role,", err)
 				}
 			}
+		}
+		if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
+			fmt.Println("error creating DM channel,", err)
+		} else if _, err := data.Session.ChannelMessageSend(channel.ID, "Trying to add you to the github team for "+projectName+". Please respond with `!github your-github-username` to be added."); err != nil {
+			fmt.Println("error sending channel message,", err)
+		} else {
+			github.AddUserToTeamWaitlist(data.Author.ID, "codefordenver", projectName)
 		}
 	}
 }
@@ -383,6 +419,16 @@ func leaveProject(data CommandData) {
 				}
 			}
 		}
+	}
+}
+
+func sendGithubUsername(data CommandData) {
+	githubName := data.Args[0]
+	message := github.AddUserToTeam(data.Author.ID, githubName)
+	if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
+		fmt.Println("error creating DM channel,", err)
+	} else if _, err := data.Session.ChannelMessageSend(channel.ID, message); err != nil {
+		fmt.Println("error sending channel message,", err)
 	}
 }
 
