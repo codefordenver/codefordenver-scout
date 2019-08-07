@@ -6,6 +6,7 @@ import (
 	"github.com/codefordenver/scout/global"
 	"github.com/codefordenver/scout/pkg/gdrive"
 	"github.com/codefordenver/scout/pkg/github"
+	"os"
 	"strings"
 )
 
@@ -42,6 +43,8 @@ type CommandHandler struct {
 
 var cmdHandler CommandHandler
 
+var brigades map[string]*global.Brigade
+
 // Dispatch a command, checking permissions first
 func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *discordgo.MessageCreate) error {
 	key := args[0]
@@ -69,7 +72,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 					if err != nil {
 						return err
 					}
-					if contains(member.Roles, global.MemberRole) {
+					if contains(member.Roles, brigades[m.GuildID].MemberRole) {
 						command.Handler(cmdData)
 					} else {
 						if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
@@ -126,7 +129,7 @@ func (c *CommandHandler) RegisterCommand(cmd Command) {
 
 // Create discord session and command handler
 func Create() (*discordgo.Session, error) {
-	dg, err := discordgo.New("Bot " + global.Token)
+	dg, err := discordgo.New("Bot " + os.Getenv("SCOUT_TOKEN"))
 	if err != nil {
 		return nil, err
 	}
@@ -179,29 +182,25 @@ func Create() (*discordgo.Session, error) {
 		Permission: PermissionDM,}
 	cmdHandler.RegisterCommand(githubCommand)
 
+	brigades = make(map[string]*global.Brigade, 0)
+
+	for _, brigade := range global.Brigades {
+		brigades[brigade.GuildID] = &brigade
+	}
+
 	return dg, nil
 }
 
 // When the bot connects to a server, record the number of uses on the onboarding invite, set role IDs.
 func ConnectToGuild(s *discordgo.Session, r *discordgo.Ready) {
 	for _, guild := range r.Guilds {
-		roles, err := s.GuildRoles(guild.ID)
-		if err != nil {
-			fmt.Println("error fetching guild roles,", err)
-		} else {
-			for _, role := range roles {
-				if role.Name == "@everyone" {
-					global.EveryoneRole[guild.ID] = role.ID
-				}
-			}
-		}
 		invites, err := s.GuildInvites(guild.ID)
 		if err != nil {
 			fmt.Println("error fetching guild invites,", err)
 		} else {
 			for _, invite := range invites {
-				if invite.Code == global.OnboardingInviteCode {
-					global.InviteCount[guild.ID] = invite.Uses
+				if invite.Code == brigades[guild.ID].OnboardingInviteCode {
+					brigades[guild.ID].InviteCount = invite.Uses
 					break
 				}
 			}
@@ -219,10 +218,10 @@ func UserJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 		return
 	}
 	for _, invite := range invites {
-		if invite.Code == global.OnboardingInviteCode {
-			if global.InviteCount[guildID] != invite.Uses {
-				global.InviteCount[guildID] = invite.Uses
-				if err := s.GuildMemberRoleAdd(guildID, user.ID, global.OnboardingRole); err != nil {
+		if invite.Code == brigades[guildID].OnboardingInviteCode {
+			if brigades[guildID].InviteCount != invite.Uses {
+				brigades[guildID].InviteCount = invite.Uses
+				if err := s.GuildMemberRoleAdd(guildID, user.ID, brigades[g.GuildID].OnboardingRole); err != nil {
 					fmt.Println("error adding role,", err)
 					return
 				}
@@ -234,23 +233,23 @@ func UserJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 
 // When a user reacts to the welcome message to indicate that they have read and understand the rules, promote them to the new member role.
 func UserReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
-	if m.MessageID == global.CodeOfConductMessageID {
+	if m.MessageID == brigades[m.GuildID].CodeOfConductMessageID {
 		member, err := s.GuildMember(m.GuildID, m.UserID)
 		if err != nil {
 			fmt.Println("error fetching member who reacted,", err)
 		}
-		if contains(member.Roles, global.NewRole) || contains(member.Roles, global.OnboardingRole) || contains(member.Roles, global.MemberRole) {
+		if contains(member.Roles, brigades[m.GuildID].NewRole) || contains(member.Roles, brigades[m.GuildID].OnboardingRole) || contains(member.Roles, brigades[m.GuildID].MemberRole) {
 			return
-		} else if err = s.GuildMemberRoleAdd(m.GuildID, m.UserID, global.NewRole); err != nil {
+		} else if err = s.GuildMemberRoleAdd(m.GuildID, m.UserID, brigades[m.GuildID].NewRole); err != nil {
 			fmt.Println("error adding role,", err)
 		}
 		return
 	}
-	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == global.ProjectCategoryId && m.Emoji.Name == global.IssueEmoji {
+	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == brigades[m.GuildID].ProjectCategoryID && m.Emoji.Name == brigades[m.GuildID].IssueEmoji {
 		if msg, err := s.ChannelMessage(m.ChannelID, m.MessageID); err != nil {
 			fmt.Println("error fetching message to create issue,", err)
 		} else {
-			errorMessage := github.CreateIssue(msg.Content, channel.Name)
+			errorMessage := github.CreateIssue(msg.Content, channel.Name, brigades[m.GuildID])
 			if errorMessage != nil {
 				if _, err := s.ChannelMessageSend(m.ChannelID, *errorMessage); err != nil {
 					fmt.Println("error sending issue status,", err)
@@ -286,12 +285,12 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 // Onboard members with the onboarding role.
 func onboard(data CommandData) {
-	onboardGroup(data.Session, data.MessageData, global.OnboardingRole)
+	onboardGroup(data.Session, data.MessageData, brigades[data.GuildID].OnboardingRole)
 }
 
 // Onboard members with the onboarding or new member role.
 func onboardAll(data CommandData) {
-	onboardGroup(data.Session, data.MessageData, global.OnboardingRole, global.NewRole)
+	onboardGroup(data.Session, data.MessageData, brigades[data.GuildID].OnboardingRole, brigades[data.GuildID].NewRole)
 }
 
 // Give users with the onboarding and/or new member role the full member role
@@ -310,7 +309,7 @@ func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
 					fmt.Println("error removing role,", err)
 					return
 				}
-				if err = s.GuildMemberRoleAdd(guildID, member.User.ID, global.MemberRole); err != nil {
+				if err = s.GuildMemberRoleAdd(guildID, member.User.ID, brigades[msgData.GuildID].MemberRole); err != nil {
 					fmt.Println("error adding member role,", err)
 					return
 				}
@@ -351,8 +350,8 @@ func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
 
 // Return a link to the agenda for the next meeting
 func getAgenda(data CommandData) {
-	message := gdrive.FetchAgenda()
-	if _, err := data.Session.ChannelMessageSend(data.MessageData.ChannelID, message); err != nil {
+	message := gdrive.FetchAgenda(brigades[data.GuildID])
+	if _, err := data.Session.ChannelMessageSend(data.ChannelID, message); err != nil {
 		fmt.Println("error sending agenda message,", err)
 	}
 }
@@ -360,8 +359,8 @@ func getAgenda(data CommandData) {
 // Return a link to requested file
 func fetchFile(data CommandData) {
 	fileName := data.Args[0]
-	message := gdrive.FetchFile(fileName)
-	if _, err := data.Session.ChannelMessageSend(data.MessageData.ChannelID, message); err != nil {
+	message := gdrive.FetchFile(fileName, brigades[data.GuildID])
+	if _, err := data.Session.ChannelMessageSend(data.ChannelID, message); err != nil {
 		fmt.Println("error sending file message,", err)
 	}
 }
@@ -372,7 +371,7 @@ func listProjects(data CommandData) {
 	} else {
 		projectsMessage := "Current projects at `" + "codefordenver" + "`:"
 		for _, channel := range channels {
-			if channel.ParentID == global.ProjectCategoryId {
+			if channel.ParentID == brigades[data.GuildID].ProjectCategoryID {
 				projectsMessage += "\n" + channel.Name
 			}
 		}
@@ -387,12 +386,12 @@ func listProjects(data CommandData) {
 // Add user to project
 func joinProject(data CommandData) {
 	projectName := data.Args[0]
-	if roles, err := data.Session.GuildRoles(data.MessageData.GuildID); err != nil {
+	if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
 		fmt.Println("error fetching guild roles,", err)
 	} else {
 		for _, role := range roles {
 			if strings.ToLower(role.Name) == strings.ToLower(projectName) {
-				if err := data.Session.GuildMemberRoleAdd(data.MessageData.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
+				if err := data.Session.GuildMemberRoleAdd(data.GuildID, data.Author.ID, role.ID); err != nil {
 					fmt.Println("error adding member role,", err)
 				}
 			}
@@ -410,7 +409,7 @@ func joinProject(data CommandData) {
 // Remove user from project
 func leaveProject(data CommandData) {
 	projectName := data.Args[0]
-	if roles, err := data.Session.GuildRoles(data.MessageData.GuildID); err != nil {
+	if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
 		fmt.Println("error fetching guild roles,", err)
 	} else {
 		for _, role := range roles {

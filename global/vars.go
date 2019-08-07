@@ -6,23 +6,30 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
+type Brigade struct {
+	// Discord config
+	GuildID                string `yaml:"GuildID"`
+	ProjectCategoryID      string `yaml:"ProjectCategoryID"`
+	EveryoneRole           string `yaml:"EveryoneRole"`
+	NewRole                string `yaml:"NewRole"`
+	OnboardingRole         string `yaml:"OnboardingRole"`
+	MemberRole             string `yaml:"MemberRole"`
+	OnboardingInviteCode   string `yaml:"OnboardingInviteCode"`
+	CodeOfConductMessageID string `yaml:"CodeOfConductMessageID"`
+	InviteCount            int    `yaml:"InviteCount"`
+	// GDrive Config
+	AgendaFolderID string            `yaml:"AgendaFolderID"`
+	LocationString string            `yaml:"LocationString"`
+	Files          map[string]string `yaml:"Files"`
+	// Github Config
+	GithubOrg  string `yaml:"GithubOrg"`
+	IssueEmoji string `yaml:"IssueEmoji"`
+}
+
 var (
-	Token                  string
-	NewRole                string
-	OnboardingRole         string
-	MemberRole             string
-	EveryoneRole           = make(map[string]string, 0)
-	OnboardingInviteCode   string
-	CodeOfConductMessageID string
-	AgendaFolderID         string
-	LocationString         string
-	PrivateKeyDir          string
-	DiscordGuildId         string
-	ProjectCategoryId      string
-	IssueEmoji             string
-	GithubOrgName          string
-	InviteCount            = make(map[string]int, 0)
-	DriveClient            *drive.Service
-	GithubClient           *github.Client
-	DiscordClient          *discordgo.Session
+	LocationString string
+	Brigades       []Brigade
+	DriveClient    *drive.Service
+	GithubClient   *github.Client
+	DiscordClient  *discordgo.Session
 )
