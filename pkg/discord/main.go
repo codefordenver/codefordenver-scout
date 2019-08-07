@@ -371,7 +371,7 @@ func listProjects(data CommandData) {
 	} else {
 		projectsMessage := "Current projects at `" + "codefordenver" + "`:"
 		for _, channel := range channels {
-			if channel.ParentID == global.ProjectCategoryId {
+			if channel.ParentID == brigades[data.GuildID].ProjectCategoryID {
 				projectsMessage += "\n" + channel.Name
 			}
 		}
