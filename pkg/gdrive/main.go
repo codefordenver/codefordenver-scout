@@ -11,7 +11,6 @@ import (
 	"google.golang.org/api/option"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"golang.org/x/net/context"
@@ -88,21 +87,6 @@ func Create() (*drive.Service, error) {
 	c.WorkdayFunc = isMeetingDay
 
 	cal.AddUsHolidays(c)
-
-	files = make(map[string]string)
-
-	fileMappingString := os.Getenv("SCOUT_FILES")
-
-	fileMappings := strings.Split(fileMappingString, ",")
-
-	for _, fileMapping := range fileMappings {
-		splitFileMapping := strings.Split(fileMapping, ":")
-		if len(splitFileMapping) == 2 {
-			fileName := splitFileMapping[0]
-			fileID := splitFileMapping[1]
-			files[fileName] = fileID
-		}
-	}
 
 	return srv, nil
 }
@@ -186,8 +170,8 @@ func saveToken(path string, token *oauth2.Token) error {
 	return nil
 }
 
-func FetchAgenda() string {
-	location, err := time.LoadLocation(global.LocationString)
+func FetchAgenda(brigade *global.Brigade) string {
+	location, err := time.LoadLocation(brigade.LocationString)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -212,7 +196,7 @@ func FetchAgenda() string {
 	}
 	var agenda *drive.File
 	if len(r.Files) == 0 {
-		r, err = global.DriveClient.Files.List().Q(fmt.Sprintf("'%s' in parents", global.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
+		r, err = global.DriveClient.Files.List().Q(fmt.Sprintf("'%s' in parents", brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
 		if err != nil {
 			fmt.Println("error fetching files from Drive,", err)
 			return "Error fetching files from Google Drive"
@@ -229,8 +213,8 @@ func FetchAgenda() string {
 	return fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink)
 }
 
-func FetchFile(name string) string {
-	if fileID, exists := files[name]; exists {
+func FetchFile(name string, brigade *global.Brigade) string {
+	if fileID, exists := brigade.Files[name]; exists {
 		r, err := global.DriveClient.Files.Get(fileID).Fields("name, webViewLink").Do()
 		if err != nil {
 			fmt.Println("error fetching file from Drive,", err)

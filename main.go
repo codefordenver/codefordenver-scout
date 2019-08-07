@@ -7,6 +7,8 @@ import (
 	"github.com/codefordenver/scout/pkg/discord"
 	"github.com/codefordenver/scout/pkg/gdrive"
 	"github.com/codefordenver/scout/pkg/github"
+	"go.mozilla.org/sops/decrypt"
+	"gopkg.in/yaml.v2"
 	"log"
 	"net/http"
 	"os"
@@ -15,26 +17,33 @@ import (
 	"time"
 )
 
+type Brigades struct {
+	Brigades []global.Brigade `yaml:"Brigades"`
+}
+
 func init() {
-	global.Token = os.Getenv("SCOUT_TOKEN")
-	global.NewRole = os.Getenv("NEW_ROLE")
-	global.OnboardingRole = os.Getenv("ONBOARDING_ROLE")
-	global.MemberRole = os.Getenv("MEMBER_ROLE")
-	global.OnboardingInviteCode = os.Getenv("ONBOARDING_INVITE_CODE")
-	global.CodeOfConductMessageID = os.Getenv("CODE_OF_CONDUCT_MESSAGE_ID")
-	global.AgendaFolderID = os.Getenv("AGENDA_FOLDER_ID")
 	global.LocationString = os.Getenv("SCOUT_LOCATION_STRING")
-	global.DiscordGuildId = os.Getenv("DISCORD_GUILD_ID")
-	global.ProjectCategoryId = os.Getenv("PROJECT_CATEGORY_ID")
-	global.IssueEmoji = os.Getenv("SCOUT_ISSUE_EMOJI")
-	global.GithubOrgName = os.Getenv("SCOUT_ORG_NAME")
 }
 
 func main() {
-	var err error
+	config, err := decrypt.File("config.yaml", "yaml")
+	if err != nil {
+		log.Fatal("error decoding configuration, ", err)
+		return
+	}
+
+	var b Brigades
+
+	if err = yaml.Unmarshal(config, &b); err != nil {
+		log.Fatal("error parsing configuration file,", err)
+		return
+	}
+
+	global.Brigades = b.Brigades
+
 	global.DriveClient, err = gdrive.Create()
 	if err != nil {
-		fmt.Println("error creating Google Drive session, ", err)
+		log.Fatal("error creating Google Drive session, ", err)
 		return
 	}
 
@@ -42,7 +51,7 @@ func main() {
 
 	global.DiscordClient, err = discord.Create()
 	if err != nil {
-		fmt.Println("error creating Discord session,", err)
+		log.Fatal("error creating Discord session,", err)
 		return
 	}
 
@@ -53,9 +62,8 @@ func main() {
 
 	err = global.DiscordClient.Open()
 	if err != nil {
-		fmt.Println("error opening connection,", err)
+		log.Fatal("error opening connection,", err)
 		return
-
 	}
 
 	port := os.Getenv("PORT")
@@ -69,7 +77,7 @@ func main() {
 	go func() {
 		err := server.ListenAndServe()
 		if err != nil {
-			log.Println("error starting github webhook,", err)
+			log.Fatal("error starting github webhook,", err)
 		}
 	}()
 
