@@ -266,7 +266,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.Author.ID == s.State.User.ID {
 		return
 	}
-	if strings.HasPrefix(m.Content, "!") {
+	if strings.HasPrefix(m.Content, "!") || containsUser(m.Mentions, s.State.User) {
 		if channel, err := s.Channel(m.ChannelID); err != nil {
 			fmt.Println("error fetching command channel,", err)
 		} else if channel.Type == discordgo.ChannelTypeGuildText {
@@ -275,6 +275,9 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 			}
 		}
 		commandText := strings.TrimPrefix(m.Content, "!")
+		if commandText == m.Content {
+			commandText = strings.TrimPrefix(m.Content, fmt.Sprintf("<@%v>", s.State.User.ID))
+		}
 		args := strings.Fields(commandText)
 		err := cmdHandler.DispatchCommand(args, s, m)
 		if err != nil {
@@ -435,6 +438,15 @@ func sendGithubUsername(data CommandData) {
 func contains(slice []string, value string) bool {
 	for _, item := range slice {
 		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
+func containsUser(slice []*discordgo.User, value *discordgo.User) bool {
+	for _, item := range slice {
+		if item.ID == value.ID {
 			return true
 		}
 	}
