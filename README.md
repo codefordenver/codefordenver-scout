@@ -12,6 +12,8 @@ Commands:
 - `!list-projects` - Messages the user a list of available projects
 - `!join [project-name]` - Adds user to the project
 - `!leave [project-name]` - Removes user from the project
+
+Note: Commands can also be triggered by `@Scout [command]`
 ## Development
 ### Setup
 Install:
