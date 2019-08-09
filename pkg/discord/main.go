@@ -393,7 +393,7 @@ func joinProject(data CommandData) {
 		fmt.Println("error fetching guild roles,", err)
 	} else {
 		for _, role := range roles {
-			if role.Name == projectName {
+			if strings.ToLower(role.Name) == strings.ToLower(projectName) {
 				if err := data.Session.GuildMemberRoleAdd(data.GuildID, data.Author.ID, role.ID); err != nil {
 					fmt.Println("error adding member role,", err)
 				}
@@ -416,7 +416,7 @@ func leaveProject(data CommandData) {
 		fmt.Println("error fetching guild roles,", err)
 	} else {
 		for _, role := range roles {
-			if strings.HasPrefix(role.Name, projectName) {
+			if strings.HasPrefix(strings.ToLower(role.Name), strings.ToLower(projectName)) {
 				if err := data.Session.GuildMemberRoleRemove(data.MessageData.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
 					fmt.Println("error adding member role,", err)
 				}

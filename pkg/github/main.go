@@ -40,7 +40,7 @@ var colorGenerator *rand.Rand
 
 var expectedUsernames map[string]AddMemberData
 
-var brigades map[string]global.Brigade
+var brigades map[string]*global.Brigade
 
 func Create() (*github.Client, error) {
 	colorGenerator = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -61,10 +61,10 @@ func Create() (*github.Client, error) {
 
 	expectedUsernames = make(map[string]AddMemberData, 0)
 
-	brigades = make(map[string]global.Brigade, 0)
+	brigades = make(map[string]*global.Brigade, 0)
 
 	for _, brigade := range global.Brigades {
-		brigades[brigade.GithubOrg] = brigade
+		brigades[brigade.GithubOrg] = &brigade
 	}
 
 	return client, nil
@@ -320,7 +320,7 @@ func AddUserToTeam(discordUser, githubName string) string {
 			} else {
 				nextPage = res.NextPage
 				for _, team := range teams {
-					if *team.Name == teamAddData.Team {
+					if strings.ToLower(*team.Name) == strings.ToLower(teamAddData.Team) {
 						opts := github.TeamAddTeamMembershipOptions{Role: "member"}
 						if _, _, err = global.GithubClient.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
 							fmt.Println("error adding user to github team,", err)
