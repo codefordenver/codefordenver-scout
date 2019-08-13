@@ -494,28 +494,29 @@ func setChampions(data CommandData) {
 	users := data.Args[1:]
 	for _, user := range users {
 		userID := strings.TrimSuffix(strings.TrimPrefix(user, "<@"), ">")
-		if discordUser, err := data.Session.User(userID); err != nil {
-			if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to find user " + user); err != nil {
+		discordUser, err := data.Session.User(userID);
+		if err != nil {
+			if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to find user "+user); err != nil {
 				fmt.Println("error sending failed to find user message,", err)
 			}
+			return
+		}
+		if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
+			fmt.Println("error fetching guild roles,", err)
 		} else {
-			if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
-				fmt.Println("error fetching guild roles,", err)
-			} else {
-				for _, role := range roles {
-					if strings.ToLower(role.Name) == strings.ToLower(projectName) + "-champion" {
-						if err := data.Session.GuildMemberRoleAdd(data.GuildID, discordUser.ID, role.ID); err != nil {
-							fmt.Println("error adding member role,", err)
-						}
+			for _, role := range roles {
+				if strings.ToLower(role.Name) == strings.ToLower(projectName)+"-champion" {
+					if err := data.Session.GuildMemberRoleAdd(data.GuildID, discordUser.ID, role.ID); err != nil {
+						fmt.Println("error adding member role,", err)
 					}
 				}
-				if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
-					fmt.Println("error creating DM channel,", err)
-				} else if _, err := data.Session.ChannelMessageSend(channel.ID, "Trying to add you as a champion for "+projectName+". Please respond with `!github your-github-username` to be added."); err != nil {
-					fmt.Println("error sending channel message,", err)
-				} else {
-					github.AddUserToChampionWaitlist(discordUser.ID, brigades[data.GuildID].GithubOrg, projectName)
-				}
+			}
+			if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
+				fmt.Println("error creating DM channel,", err)
+			} else if _, err := data.Session.ChannelMessageSend(channel.ID, "Trying to add you as a champion for "+projectName+". Please respond with `!github your-github-username` to be added."); err != nil {
+				fmt.Println("error sending channel message,", err)
+			} else {
+				github.AddUserToChampionWaitlist(discordUser.ID, brigades[data.GuildID].GithubOrg, projectName)
 			}
 		}
 	}
