@@ -36,9 +36,15 @@ type AddMemberData struct {
 	Owner string
 }
 
+type AddChampionData struct {
+	Project string
+	Owner   string
+}
+
 var colorGenerator *rand.Rand
 
-var expectedUsernames map[string]AddMemberData
+var teamWaitlist map[string]AddMemberData
+var championWaitlist map[string]AddChampionData
 
 var brigades map[string]*global.Brigade
 
@@ -59,7 +65,9 @@ func Create() (*github.Client, error) {
 	}
 	client := github.NewClient(&http.Client{Transport: itr})
 
-	expectedUsernames = make(map[string]AddMemberData, 0)
+	teamWaitlist = make(map[string]AddMemberData, 0)
+
+	championWaitlist = make(map[string]AddChampionData, 0)
 
 	brigades = make(map[string]*global.Brigade, 0)
 
@@ -152,6 +160,7 @@ func handleRepositoryCreate(repo Repository) {
 	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(brigades[repo.Owner.Name].GuildID, channelCreateData); err != nil {
 		fmt.Println("error creating text channel for new project,", err)
 	} else {
+		// Add webhook to Discord text channel
 		if discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
 			fmt.Println("error creating github webhook for text channel,", err)
 		} else {
@@ -170,6 +179,10 @@ func handleRepositoryCreate(repo Repository) {
 			if err != nil {
 				fmt.Println("error creating Github webhook,", err)
 			}
+		}
+		// Send prompt to set champions in Discord text channel
+		if _, err := global.DiscordClient.ChannelMessageSend(textChannel.ID, "@admin, use `!champions "+strings.ToLower(repo.Name)+" [list of project champion mentions]` to set champions for this project"); err != nil {
+			fmt.Println("error sending project champions prompt")
 		}
 	}
 
@@ -295,45 +308,81 @@ func handleRepositoryDelete(repo Repository) {
 	}
 }
 
+// Dispatch a username to the appropriate waitlist
+func DispatchUsername(discordUser, githubName string) []string {
+	var message []string
+	var validChampion, validTeamMember bool
+	if _, validChampion = championWaitlist[discordUser]; validChampion {
+		message = append(message, setProjectChampion(discordUser, githubName))
+	}
+	if _, validTeamMember = teamWaitlist[discordUser]; validTeamMember {
+		message = append(message, addUserToTeam(discordUser, githubName))
+	}
+	if !validChampion && !validTeamMember {
+		message = []string{"Was not expecting a github username from you. Have you either `!join`ed a project or been requested to be a project champion?"}
+	}
+	return message
+}
+
+// Sets champions for a project
+func AddUserToChampionWaitlist(discordUser string, owner, project string) {
+	championWaitlist[discordUser] = AddChampionData{
+		Project: project,
+		Owner:   owner,
+	}
+}
+
+// Actually makes a user project champion
+func setProjectChampion(discordUser, githubName string) string {
+	opt := github.RepositoryAddCollaboratorOptions{
+		Permission: "admin",
+	}
+	championSetData := championWaitlist[discordUser]
+	if _, err := global.GithubClient.Repositories.AddCollaborator(context.Background(), championSetData.Owner, championSetData.Project, githubName, &opt); err != nil {
+		return "Failed to give you administrator access to " + championSetData.Project + ". Please contact a brigade captain to manually add you."
+	} else {
+		delete(championWaitlist, discordUser)
+		return "You've been added as a champion of " + championSetData.Project
+	}
+}
+
 // Adds a user to the waitlist(waiting to receive their Github username for team)
 func AddUserToTeamWaitlist(discordUser, owner, team string) {
-	expectedUsernames[discordUser] = AddMemberData{
+	teamWaitlist[discordUser] = AddMemberData{
 		Team:  team,
 		Owner: owner,
 	}
 }
 
-func AddUserToTeam(discordUser, githubName string) string {
-	if teamAddData, ok := expectedUsernames[discordUser]; !ok {
-		return "Wasn't expecting a github username from you! Did you use `!join` yet?"
-	} else {
-		nextPage := 0
-		for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
-			opt := github.ListOptions{
-				Page:    nextPage,
-				PerPage: 100,
-			}
-			teams, res, err := global.GithubClient.Teams.ListTeams(context.Background(), teamAddData.Owner, &opt)
-			if err != nil {
-				fmt.Println("error fetching Github team,", err)
-				nextPage = 0
-			} else {
-				nextPage = res.NextPage
-				for _, team := range teams {
-					if strings.ToLower(*team.Name) == strings.ToLower(teamAddData.Team) {
-						opts := github.TeamAddTeamMembershipOptions{Role: "member"}
-						if _, _, err = global.GithubClient.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
-							fmt.Println("error adding user to github team,", err)
-							return "Failed to add you to the github team `" + teamAddData.Team + "`. Try again later."
-						}
-						delete(expectedUsernames, discordUser)
-						return "You've been added to " + teamAddData.Team
+// Actually adds user to team(and therefore github org)
+func addUserToTeam(discordUser, githubName string) string {
+	teamAddData := teamWaitlist[discordUser]
+	nextPage := 0
+	for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
+		opt := github.ListOptions{
+			Page:    nextPage,
+			PerPage: 100,
+		}
+		teams, res, err := global.GithubClient.Teams.ListTeams(context.Background(), teamAddData.Owner, &opt)
+		if err != nil {
+			fmt.Println("error fetching Github team,", err)
+			nextPage = 0
+		} else {
+			nextPage = res.NextPage
+			for _, team := range teams {
+				if strings.ToLower(*team.Name) == strings.ToLower(teamAddData.Team) {
+					opts := github.TeamAddTeamMembershipOptions{Role: "member"}
+					if _, _, err = global.GithubClient.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
+						fmt.Println("error adding user to github team,", err)
+						return "Failed to add you to the github team **" + teamAddData.Team + "**. Try again later."
 					}
+					delete(teamWaitlist, discordUser)
+					return "You've been added to **" + teamAddData.Team + "**"
 				}
 			}
 		}
-		return "Failed to find the github team for `" + teamAddData.Team + "`. Try again later."
 	}
+	return "Failed to find the github team for **" + teamAddData.Team + "**. Try again later."
 }
 
 // Creates an issue

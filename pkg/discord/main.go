@@ -7,6 +7,7 @@ import (
 	"github.com/codefordenver/scout/pkg/gdrive"
 	"github.com/codefordenver/scout/pkg/github"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -14,6 +15,7 @@ type Permission int
 
 const (
 	PermissionAll Permission = iota
+	PermissionAdmin
 	PermissionMembers
 	PermissionDM
 	PermissionChannel
@@ -35,6 +37,8 @@ type Command struct {
 	Keyword    string
 	Handler    func(CommandData)
 	Permission Permission
+	MinArgs    int
+	MaxArgs    int
 }
 
 type CommandHandler struct {
@@ -62,7 +66,39 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 		Args:        args,
 	}
 	if command, exists := c.Commands[key]; exists {
+		if (command.MinArgs != -1 && len(args) < command.MinArgs) || (command.MaxArgs != -1 && len(args) > command.MaxArgs) {
+			if command.MinArgs == command.MaxArgs {
+				if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+strconv.Itoa(command.MinArgs)); err != nil {
+					return err
+				}
+			} else {
+				if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+strconv.Itoa(command.MinArgs)+"-"+strconv.Itoa(command.MaxArgs)); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
 		switch command.Permission {
+		case PermissionAdmin:
+			if channel, err := s.Channel(m.ChannelID); err != nil {
+				return err
+			} else {
+				if channel.Type == discordgo.ChannelTypeGuildText {
+					if perm, err := s.UserChannelPermissions(m.Author.ID, m.ChannelID); err != nil {
+						return err
+					} else if (perm & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator {
+						command.Handler(cmdData)
+					} else {
+						if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+							return err
+						}
+					}
+				} else {
+					if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
+						return err
+					}
+				}
+			}
 		case PermissionMembers:
 			if channel, err := s.Channel(m.ChannelID); err != nil {
 				return err
@@ -76,12 +112,12 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 						command.Handler(cmdData)
 					} else {
 						if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
-							fmt.Println("error sending permissions message,", err)
+							return err
 						}
 					}
 				} else {
 					if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
-						fmt.Println("error sending permissions message,", err)
+						return err
 					}
 				}
 			}
@@ -94,7 +130,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 				command.Handler(cmdData)
 			} else {
 				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a DM"); err != nil {
-					fmt.Println("error sending permissions message,", err)
+					return err
 				}
 			}
 		case PermissionChannel:
@@ -106,7 +142,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 				command.Handler(cmdData)
 			} else {
 				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
-					fmt.Println("error sending permissions message,", err)
+					return err
 				}
 			}
 		case PermissionAll:
@@ -140,46 +176,73 @@ func Create() (*discordgo.Session, error) {
 		Keyword:    "onboard",
 		Handler:    onboard,
 		Permission: PermissionMembers,
+		MinArgs:    0,
+		MaxArgs:    0,
 	}
 	cmdHandler.RegisterCommand(onboardCommand)
 	onboardAllCommand := Command{
 		Keyword:    "onboardall",
 		Handler:    onboardAll,
 		Permission: PermissionMembers,
+		MinArgs:    0,
+		MaxArgs:    0,
 	}
 	cmdHandler.RegisterCommand(onboardAllCommand)
 	getAgendaCommand := Command{
 		Keyword:    "agenda",
 		Handler:    getAgenda,
 		Permission: PermissionAll,
+		MinArgs:    0,
+		MaxArgs:    0,
 	}
 	cmdHandler.RegisterCommand(getAgendaCommand)
 	fetchFileCommand := Command{
 		Keyword:    "fetch",
 		Handler:    fetchFile,
 		Permission: PermissionMembers,
+		MinArgs:    1,
+		MaxArgs:    1,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
 	listCommand := Command{
 		Keyword:    "list-projects",
 		Handler:    listProjects,
 		Permission: PermissionChannel,
+		MinArgs:    0,
+		MaxArgs:    0,
 	}
 	cmdHandler.RegisterCommand(listCommand)
 	joinCommand := Command{
 		Keyword:    "join",
 		Handler:    joinProject,
-		Permission: PermissionMembers,}
+		Permission: PermissionMembers,
+		MinArgs:    1,
+		MaxArgs:    1,
+	}
 	cmdHandler.RegisterCommand(joinCommand)
 	leaveCommand := Command{
 		Keyword:    "leave",
 		Handler:    leaveProject,
-		Permission: PermissionMembers,}
+		Permission: PermissionMembers,
+		MinArgs:    1,
+		MaxArgs:    1,
+	}
 	cmdHandler.RegisterCommand(leaveCommand)
+	championsCommand := Command{
+		Keyword:    "champion",
+		Handler:    setChampions,
+		Permission: PermissionAdmin,
+		MinArgs:    2,
+		MaxArgs:    -1,
+	}
+	cmdHandler.RegisterCommand(championsCommand)
 	githubCommand := Command{
 		Keyword:    "github",
 		Handler:    sendGithubUsername,
-		Permission: PermissionDM,}
+		Permission: PermissionDM,
+		MinArgs:    1,
+		MaxArgs:    1,
+	}
 	cmdHandler.RegisterCommand(githubCommand)
 
 	brigades = make(map[string]*global.Brigade, 0)
@@ -404,7 +467,7 @@ func joinProject(data CommandData) {
 		} else if _, err := data.Session.ChannelMessageSend(channel.ID, "Trying to add you to the github team for "+projectName+". Please respond with `!github your-github-username` to be added."); err != nil {
 			fmt.Println("error sending channel message,", err)
 		} else {
-			github.AddUserToTeamWaitlist(data.Author.ID, "codefordenver", projectName)
+			github.AddUserToTeamWaitlist(data.Author.ID, brigades[data.GuildID].GithubOrg, projectName)
 		}
 	}
 }
@@ -425,13 +488,50 @@ func leaveProject(data CommandData) {
 	}
 }
 
+// Set project champion(s)
+func setChampions(data CommandData) {
+	projectName := data.Args[0]
+	users := data.Args[1:]
+	for _, user := range users {
+		userID := strings.TrimSuffix(strings.TrimPrefix(user, "<@"), ">")
+		discordUser, err := data.Session.User(userID);
+		if err != nil {
+			if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to find user "+user); err != nil {
+				fmt.Println("error sending failed to find user message,", err)
+			}
+			return
+		}
+		if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
+			fmt.Println("error fetching guild roles,", err)
+		} else {
+			for _, role := range roles {
+				if strings.ToLower(role.Name) == strings.ToLower(projectName)+"-champion" {
+					if err := data.Session.GuildMemberRoleAdd(data.GuildID, discordUser.ID, role.ID); err != nil {
+						fmt.Println("error adding member role,", err)
+					}
+				}
+			}
+			if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
+				fmt.Println("error creating DM channel,", err)
+			} else if _, err := data.Session.ChannelMessageSend(channel.ID, "Trying to add you as a champion for "+projectName+". Please respond with `!github your-github-username` to be added."); err != nil {
+				fmt.Println("error sending channel message,", err)
+			} else {
+				github.AddUserToChampionWaitlist(discordUser.ID, brigades[data.GuildID].GithubOrg, projectName)
+			}
+		}
+	}
+}
+
+// Send github username to add user to team or set as admin
 func sendGithubUsername(data CommandData) {
 	githubName := data.Args[0]
-	message := github.AddUserToTeam(data.Author.ID, githubName)
-	if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
-		fmt.Println("error creating DM channel,", err)
-	} else if _, err := data.Session.ChannelMessageSend(channel.ID, message); err != nil {
-		fmt.Println("error sending channel message,", err)
+	messages := github.DispatchUsername(data.Author.ID, githubName)
+	for _, message := range messages {
+		if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
+			fmt.Println("error creating DM channel,", err)
+		} else if _, err := data.Session.ChannelMessageSend(channel.ID, message); err != nil {
+			fmt.Println("error sending channel message,", err)
+		}
 	}
 }
 
