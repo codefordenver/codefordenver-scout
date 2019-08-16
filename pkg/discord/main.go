@@ -365,6 +365,9 @@ func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
 	guild, err := s.Guild(guildID)
 	if err != nil {
 		fmt.Println("error fetching guild,", err)
+		if _, err := s.ChannelMessageSend(msgData.ChannelID, "Failed to onboard users. Please try again later."); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
 		return
 	}
 	onboardedUsers := make([]*discordgo.User, 0)
@@ -373,11 +376,11 @@ func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
 			if contains(member.Roles, role) {
 				if err = s.GuildMemberRoleRemove(guildID, member.User.ID, role); err != nil {
 					fmt.Println("error removing role,", err)
-					return
+					break
 				}
 				if err = s.GuildMemberRoleAdd(guildID, member.User.ID, brigades[msgData.GuildID].MemberRole); err != nil {
 					fmt.Println("error adding member role,", err)
-					return
+					break
 				}
 				onboardedUsers = append(onboardedUsers, member.User)
 				break
