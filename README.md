@@ -24,6 +24,7 @@ Install:
 Set environment variables:
 ```
 SCOUT_TOKEN=discord bot token
+AIRTABLE_API_KEY=Airtable account key
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
@@ -45,9 +46,7 @@ Brigades:
     CodeOfConductMessageID: "5802051351128XXXXX"
     AgendaFolderID: "1NL1M9G0iJVwNDa7kRL1rqypUnafXXXXX"
     LocationString: "America/Denver"
-    Files:
-      attendance: "1gj-Se7U4wUFLzNsVhVJol5mS1JsbMRPTT59z87XXXXX"
-      onboarding: "1Jj97b0PdM2RC1kXXmyt3RL81u3NvUqt0KK2TW4XXXXX"
+    AirtableBaseID: "appXXXXXXXXXXXXXX"
     GithubOrg: "codefordenver"
     IssueEmoji: "➡"
 

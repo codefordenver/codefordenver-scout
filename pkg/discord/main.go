@@ -2,6 +2,7 @@ package discord
 
 import (
 	"fmt"
+	"github.com/brianloveswords/airtable"
 	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/scout/global"
 	"github.com/codefordenver/scout/pkg/gdrive"
@@ -16,7 +17,7 @@ type Permission int
 const (
 	PermissionAll Permission = iota
 	PermissionAdmin
-	PermissionMembers
+	PermissionMember
 	PermissionDM
 	PermissionChannel
 )
@@ -99,7 +100,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 					}
 				}
 			}
-		case PermissionMembers:
+		case PermissionMember:
 			if channel, err := s.Channel(m.ChannelID); err != nil {
 				return err
 			} else {
@@ -175,7 +176,7 @@ func Create() (*discordgo.Session, error) {
 	onboardCommand := Command{
 		Keyword:    "onboard",
 		Handler:    onboard,
-		Permission: PermissionMembers,
+		Permission: PermissionMember,
 		MinArgs:    0,
 		MaxArgs:    0,
 	}
@@ -183,7 +184,7 @@ func Create() (*discordgo.Session, error) {
 	onboardAllCommand := Command{
 		Keyword:    "onboardall",
 		Handler:    onboardAll,
-		Permission: PermissionMembers,
+		Permission: PermissionMember,
 		MinArgs:    0,
 		MaxArgs:    0,
 	}
@@ -196,14 +197,6 @@ func Create() (*discordgo.Session, error) {
 		MaxArgs:    0,
 	}
 	cmdHandler.RegisterCommand(getAgendaCommand)
-	fetchFileCommand := Command{
-		Keyword:    "fetch",
-		Handler:    fetchFile,
-		Permission: PermissionMembers,
-		MinArgs:    1,
-		MaxArgs:    1,
-	}
-	cmdHandler.RegisterCommand(fetchFileCommand)
 	listCommand := Command{
 		Keyword:    "list-projects",
 		Handler:    listProjects,
@@ -215,7 +208,7 @@ func Create() (*discordgo.Session, error) {
 	joinCommand := Command{
 		Keyword:    "join",
 		Handler:    joinProject,
-		Permission: PermissionMembers,
+		Permission: PermissionMember,
 		MinArgs:    1,
 		MaxArgs:    1,
 	}
@@ -223,7 +216,7 @@ func Create() (*discordgo.Session, error) {
 	leaveCommand := Command{
 		Keyword:    "leave",
 		Handler:    leaveProject,
-		Permission: PermissionMembers,
+		Permission: PermissionMember,
 		MinArgs:    1,
 		MaxArgs:    1,
 	}
@@ -244,6 +237,30 @@ func Create() (*discordgo.Session, error) {
 		MaxArgs:    1,
 	}
 	cmdHandler.RegisterCommand(githubCommand)
+	trackCommand := Command{
+		Keyword:    "track",
+		Handler:    trackFile,
+		Permission: PermissionMember,
+		MinArgs:    2,
+		MaxArgs:    2,
+	}
+	cmdHandler.RegisterCommand(trackCommand)
+	untrackCommand := Command{
+		Keyword:    "untrack",
+		Handler:    untrackFile,
+		Permission: PermissionMember,
+		MinArgs:    1,
+		MaxArgs:    1,
+	}
+	cmdHandler.RegisterCommand(untrackCommand)
+	fetchFileCommand := Command{
+		Keyword:    "fetch",
+		Handler:    fetchFileDispatch,
+		Permission: PermissionMember,
+		MinArgs:    1,
+		MaxArgs:    1,
+	}
+	cmdHandler.RegisterCommand(fetchFileCommand)
 
 	brigades = make(map[string]*global.Brigade, 0)
 
@@ -422,15 +439,7 @@ func getAgenda(data CommandData) {
 	}
 }
 
-// Return a link to requested file
-func fetchFile(data CommandData) {
-	fileName := data.Args[0]
-	message := gdrive.FetchFile(fileName, brigades[data.GuildID])
-	if _, err := data.Session.ChannelMessageSend(data.ChannelID, message); err != nil {
-		fmt.Println("error sending file message,", err)
-	}
-}
-
+// List available projects
 func listProjects(data CommandData) {
 	if channels, err := data.Session.GuildChannels(data.GuildID); err != nil {
 		fmt.Println("error fetching guild channels,", err)
@@ -533,6 +542,122 @@ func sendGithubUsername(data CommandData) {
 			fmt.Println("error sending channel message,", err)
 		}
 	}
+}
+
+type FileRecord struct {
+	airtable.Record
+	Fields struct {
+		Name string
+		Link string
+	}
+}
+
+// Add a file to Airtable tracking
+func trackFile(data CommandData) {
+	fileName := data.Args[0]
+	link := data.Args[1]
+	client := airtable.Client{
+		APIKey: global.AirtableKey,
+		BaseID: brigades[data.GuildID].AirtableBaseID,
+	}
+	file, err := fetchFile(data)
+	if file != nil {
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "A file with the name **"+fileName+"** is already tracked: "+file.Fields.Link); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
+		return
+	} else if err != nil {
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to check if a file with the name **"+fileName+"** is already tracked."); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
+		return
+	}
+	files := client.Table("Files")
+	newRecord := FileRecord{
+		Fields: struct {
+			Name string
+			Link string
+		}{
+			Name: fileName,
+			Link: link,
+		},
+	}
+	if err := files.Create(&newRecord); err != nil {
+		fmt.Println("error creating new airtable record,", err)
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to track new file. Try again later."); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
+	} else {
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "File successfully tracked. Use `!fetch "+fileName+"` to retrieve it, or `!untrack "+fileName+"` to untrack it."); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
+	}
+}
+
+func untrackFile(data CommandData) {
+	fileName := data.Args[0]
+	client := airtable.Client{
+		APIKey: global.AirtableKey,
+		BaseID: brigades[data.GuildID].AirtableBaseID,
+	}
+	files := client.Table("Files")
+	file, err := fetchFile(data)
+	if file == nil {
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "No file with the name **"+fileName+"** is tracked."); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
+		return
+	} else if err != nil {
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to check if a file with the name **"+fileName+"** is already tracked."); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
+		return
+	}
+	if err = files.Delete(file); err != nil {
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to untrack **"+fileName+"**. Try again later."); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
+	} else {
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Successfully untracked **"+fileName+"**."); err != nil {
+			fmt.Println("error sending message to channel,", err)
+		}
+	}
+}
+
+// Handle fetch command
+func fetchFileDispatch(data CommandData) {
+	file, err := fetchFile(data)
+	var msg string
+	if file != nil {
+		msg = file.Fields.Link
+	} else if err != nil {
+		msg = "Failed to fetch file **" + data.Args[0] + "**. Try again later."
+	} else {
+		msg = "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it"
+	}
+	if _, err := data.Session.ChannelMessageSend(data.ChannelID, msg); err != nil {
+		fmt.Println("error sending message to channel,", err)
+	}
+}
+
+// Return a link to requested file
+func fetchFile(data CommandData) (*FileRecord, error) {
+	fileName := data.Args[0]
+	client := airtable.Client{
+		APIKey: global.AirtableKey,
+		BaseID: brigades[data.GuildID].AirtableBaseID,
+	}
+	var results []FileRecord
+	opts := airtable.Options{Filter: `{Name} = "` + fileName + `"`}
+	files := client.Table("Files")
+	var err error
+	err = files.List(&results, &opts)
+	if len(results) == 1 {
+		return &results[0], nil
+	} else if len(results) == 0 {
+		return nil, nil
+	}
+	return nil, err
 }
 
 func contains(slice []string, value string) bool {
