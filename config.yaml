@@ -10,6 +10,7 @@ Brigades:
     CodeOfConductMessageID: ENC[AES256_GCM,data:K3UDjApDuHTlupow8ci2J+JP,iv:iuqIFVSuCb0itgDvk0feap3owHLKMNgfCgBacPPZRnk=,tag:kkNIDPP0n4yaGqlBjOVisA==,type:str]
     AgendaFolderID: ENC[AES256_GCM,data:M2uw6toYkWJAMkkp9bF/gFZ/eNlPcwX9S+aZ5Jj5/MTm,iv:tTdB0/bPYXHGR+8aBBStqEKVvy7r3OLid7EYtcfSgxc=,tag:MJEcC4pLYrrA/lwiH17Oug==,type:str]
     LocationString: ENC[AES256_GCM,data:YKzQOTpt0Vk7hoGA97Q=,iv:YPGlGLXDhOWF/uKp/vJ1MmZSvzCTd0qc5TIMRNpT5gA=,tag:7WcMnW77CrIWTX/CXoQgrg==,type:str]
+    AirtableBaseID: ENC[AES256_GCM,data:MQO7jYyY/w0hFbFfdYa4HBs=,iv:MdLoh0Suvcxr9Bg767TusA2di+ybbV6XuCulXRDdzyo=,tag:yRDZ+mr82bHzEAp269crEQ==,type:str]
     Files:
         attendance: ENC[AES256_GCM,data:IP4wOsiGX/2ekJgvqKJrpj/Jymyk8yfYip4Y7VIZwe8Spb0CFjPKSumzlgo=,iv:PIoWA4mxuAgS347oTDixR27Ct2q+fc0WmopFOEhKrhU=,tag:XzXvAIoU7LmlfWMX4E7ESg==,type:str]
         onboarding: ENC[AES256_GCM,data:lyR5lqxbIWJptFjzOA40Jj8w5+PwbjUNAEpX45Pag4kmeT1H8x9rlvG4sxQ=,iv:V+rYYJU9gyIU8LdsaJSx1n7u2Fze9bz+NtH/1Sbr0fU=,tag:iC5tvb6X+88/UpZKFiTSaA==,type:str]
@@ -23,8 +24,8 @@ sops:
         aws_profile: ""
     gcp_kms: []
     azure_kv: []
-    lastmodified: '2019-08-09T00:40:46Z'
-    mac: ENC[AES256_GCM,data:4B1Oy1io1V5xjmwMqAVrxs/pU5Gd8hgd4AbDde4kFyzOBXJauRZ7klOWRmc/+xBuiiKTWQvtojvNlXfV9NjGUFKMpnl1rmAc8Nly4flDIt20dAEUJRHBpn6EdHeQ2O61r6De5OzAJM73Y831qVav0U9UfrK5AMpgQBBFt+mgUrk=,iv:dE2McUg7Px2/F8ZZeaKujnXOTT9sKfENVrhMatQtwnY=,tag:YosstWv1V9c/rqLTq7izlA==,type:str]
+    lastmodified: '2019-08-16T01:11:23Z'
+    mac: ENC[AES256_GCM,data:zQTy6EJAfYYDc33yYiglmed+8KsnoiQpDcym05b7k2OaNco0uqx5wOYuXft8uwskV1CV5DTrrfsPzjM3NIqG9mzc4dP6FwqYg+0+lzBRO7ki2NjFT3FVsUDaxd4O3Mo3jOC80T4RmlN1WLOuRZ2QEWcnPKQYEdpO93OGijckWRs=,iv:TIYZE7XLGZ7VDWDp+EiGSbH88vU7OA+WIcQ4KL7sALQ=,tag:cUToM6hyEIm8n5Tt9IU3dw==,type:str]
     pgp: []
     unencrypted_suffix: _unencrypted
     version: 3.3.1

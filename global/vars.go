@@ -17,10 +17,10 @@ type Brigade struct {
 	OnboardingInviteCode   string `yaml:"OnboardingInviteCode"`
 	CodeOfConductMessageID string `yaml:"CodeOfConductMessageID"`
 	InviteCount            int    `yaml:"InviteCount"`
+	AirtableBaseID         string `yaml:"AirtableBaseID"`
 	// GDrive Config
 	AgendaFolderID string            `yaml:"AgendaFolderID"`
 	LocationString string            `yaml:"LocationString"`
-	Files          map[string]string `yaml:"Files"`
 	// Github Config
 	GithubOrg  string `yaml:"GithubOrg"`
 	IssueEmoji string `yaml:"IssueEmoji"`
@@ -28,6 +28,7 @@ type Brigade struct {
 
 var (
 	LocationString string
+	AirtableKey    string
 	Brigades       []Brigade
 	DriveClient    *drive.Service
 	GithubClient   *github.Client

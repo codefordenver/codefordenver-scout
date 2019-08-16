@@ -212,16 +212,3 @@ func FetchAgenda(brigade *global.Brigade) string {
 	}
 	return fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink)
 }
-
-func FetchFile(name string, brigade *global.Brigade) string {
-	if fileID, exists := brigade.Files[name]; exists {
-		r, err := global.DriveClient.Files.Get(fileID).Fields("name, webViewLink").Do()
-		if err != nil {
-			fmt.Println("error fetching file from Drive,", err)
-			return "Error fetching requested file from google drive"
-		}
-		return fmt.Sprintf("%s - %s", r.Name, r.WebViewLink)
-	} else {
-		return "The requested file does not exist"
-	}
-}
