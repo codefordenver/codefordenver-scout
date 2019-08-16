@@ -25,12 +25,13 @@ Install:
 
 Set environment variables:
 ```
+AWS_ACCESS_KEY_ID=AWS key ID for sops
+AWS_SECRET_ACCESS_KEY=AWS key secret for sops
 SCOUT_TOKEN=discord bot token
 AIRTABLE_API_KEY=Airtable account key
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
-SCOUT_CONFIG=base64 str version of config.yaml
 SCOUT_LOCATION_STRING=TZ data location string
 ```
 Get these values from a current project member
