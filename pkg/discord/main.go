@@ -240,7 +240,7 @@ func Create() (*discordgo.Session, error) {
 	trackCommand := Command{
 		Keyword:    "track",
 		Handler:    trackFile,
-		Permission: PermissionMember,
+		Permission: PermissionAdmin,
 		MinArgs:    2,
 		MaxArgs:    2,
 	}
@@ -248,7 +248,7 @@ func Create() (*discordgo.Session, error) {
 	untrackCommand := Command{
 		Keyword:    "untrack",
 		Handler:    untrackFile,
-		Permission: PermissionMember,
+		Permission: PermissionAdmin,
 		MinArgs:    1,
 		MaxArgs:    1,
 	}
