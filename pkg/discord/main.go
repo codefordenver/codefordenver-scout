@@ -557,7 +557,7 @@ type FileRecord struct {
 
 // Add a file to Airtable tracking
 func trackFile(data CommandData) {
-	fileName := data.Args[0]
+	fileName := strings.ToLower(data.Args[0])
 	link := data.Args[1]
 	client := airtable.Client{
 		APIKey: global.AirtableKey,
@@ -598,7 +598,7 @@ func trackFile(data CommandData) {
 }
 
 func untrackFile(data CommandData) {
-	fileName := data.Args[0]
+	fileName := strings.ToLower(data.Args[0])
 	client := airtable.Client{
 		APIKey: global.AirtableKey,
 		BaseID: brigades[data.GuildID].AirtableBaseID,
@@ -645,7 +645,7 @@ func fetchFileDispatch(data CommandData) {
 
 // Return a link to requested file
 func fetchFile(data CommandData) (*FileRecord, error) {
-	fileName := data.Args[0]
+	fileName := strings.ToLower(data.Args[0])
 	client := airtable.Client{
 		APIKey: global.AirtableKey,
 		BaseID: brigades[data.GuildID].AirtableBaseID,
