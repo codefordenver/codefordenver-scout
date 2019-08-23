@@ -153,7 +153,7 @@ func handleRepositoryCreate(repo Repository) {
 	channelCreateData := discordgo.GuildChannelCreateData{
 		Name:     repo.Name,
 		Type:     discordgo.ChannelTypeGuildText,
-		ParentID: brigades[repo.Owner.Name].ProjectCategoryID,
+		ParentID: brigades[repo.Owner.Name].ActiveProjectCategoryID,
 		PermissionOverwrites: []*discordgo.PermissionOverwrite{
 			&projectChampionOverwrite,
 			&projectOverwrite,
@@ -193,7 +193,7 @@ func handleRepositoryCreate(repo Repository) {
 	githubChannelCreateData := discordgo.GuildChannelCreateData{
 		Name:     repo.Name + "-github",
 		Type:     discordgo.ChannelTypeGuildText,
-		ParentID: brigades[repo.Owner.Name].ProjectCategoryID,
+		ParentID: brigades[repo.Owner.Name].ActiveProjectCategoryID,
 		PermissionOverwrites: []*discordgo.PermissionOverwrite{
 			&projectChampionOverwrite,
 			&projectOverwrite,
@@ -232,7 +232,7 @@ func handleRepositoryCreate(repo Repository) {
 		})
 		i := 0
 		for _, channel := range channels {
-			if channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == brigades[repo.Owner.Name].ProjectCategoryID {
+			if channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == brigades[repo.Owner.Name].ActiveProjectCategoryID {
 				channel.Position = i
 				i++
 			}

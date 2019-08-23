@@ -40,7 +40,7 @@ Example config.yaml:
 ```yaml
 Brigades:
 -   GuildID: "5356701682701XXXXX"
-    ProjectCategoryID: "5356777664573XXXXX"
+    ActiveProjectCategoryID: "5356777664573XXXXX"
     EveryoneRole: "5356701682701XXXXX" #Yes, this is the same as the GuildID, they are separated for clarity
     NewRole: "5738722616191XXXXX"
     OnboardingRole: "5783212265866XXXXX"
