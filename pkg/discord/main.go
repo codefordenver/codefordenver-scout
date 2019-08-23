@@ -682,7 +682,7 @@ func decomissionProject(data CommandData) {
 	for _, ch := range guild.Channels {
 		if strings.ToLower(projectName) == ch.Name {
 			channel = ch
-		} else if strings.TrimPrefix(strings.ToLower(projectName), "-github") == ch.Name {
+		} else if strings.ToLower(projectName) == strings.TrimSuffix(ch.Name, "-github") {
 			githubChannel = ch
 		}
 		if channel != nil && githubChannel != nil {
