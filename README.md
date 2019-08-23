@@ -11,6 +11,7 @@ Commands:
 - `!list-projects` - Messages the user a list of available projects
 - `!join [project name]` - Adds user to the project
 - `!leave [project name]` - Removes user from the project
+- `!maintain [project name]` - Moves a project to maintenance
 - `!track [file name] [link]` - Adds the file to Airtable
 - `!untrack [file name]` - Removes the file from Airtable
 - `!fetch [file name]` - Fetches a file specified in Airtable
