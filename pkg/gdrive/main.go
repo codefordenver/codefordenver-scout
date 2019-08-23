@@ -19,7 +19,6 @@ import (
 )
 
 var c *cal.Calendar
-var files map[string]string
 
 func Monday(date time.Time) time.Time {
 	weekdayInt := int(date.Weekday())
@@ -55,31 +54,33 @@ func isMeetingDay(date time.Time) bool {
 	return mondayInt == 1 || mondayInt == 2 || mondayInt == 4
 }
 
+var client *drive.Service
+
 // Create a drive API client and calendar object for meeting tracking
-func Create() (*drive.Service, error) {
+func Create() error {
 	credsEnv := os.Getenv("GDRIVE_CREDS")
 	creds, err := base64.StdEncoding.DecodeString(credsEnv)
 	if err != nil {
 		fmt.Println("error reading Drive client secret file,", err)
-		return nil, err
+		return err
 	}
 
 	// If modifying these scopes, delete your previously saved token.json.
 	config, err := google.ConfigFromJSON(creds, drive.DriveReadonlyScope, drive.DriveFileScope)
 	if err != nil {
 		fmt.Println("error parsing client secret file to Drive config,", err)
-		return nil, err
+		return err
 	}
-	client, err := getClient(config)
+	HTTPClient, err := getClient(config)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	ctx := context.Background()
-	srv, err := drive.NewService(ctx, option.WithHTTPClient(client), option.WithScopes(drive.DriveMetadataReadonlyScope))
+	client, err = drive.NewService(ctx, option.WithHTTPClient(HTTPClient), option.WithScopes(drive.DriveMetadataReadonlyScope))
 	if err != nil {
 		fmt.Println("error retrieving Drive client,", err)
-		return nil, err
+		return err
 	}
 
 	c = cal.NewCalendar()
@@ -88,7 +89,7 @@ func Create() (*drive.Service, error) {
 
 	cal.AddUsHolidays(c)
 
-	return srv, nil
+	return nil
 }
 
 // Retrieve a token, saves the token, then returns the generated client.
@@ -118,7 +119,9 @@ func getClient(config *oauth2.Config) (*http.Client, error) {
 		}
 	}
 
-	saveToken(tokFile, tok)
+	if err := saveToken(tokFile, tok); err != nil {
+		return nil, err
+	}
 	return config.Client(context.Background(), tok), nil
 }
 
@@ -188,7 +191,7 @@ func FetchAgenda(brigade *global.Brigade) string {
 		nextMeetingDate = nextMeetingDate.AddDate(0, 0, c.WorkdayN(date.Year(), date.Month(), c.Workdays(date.Year(), date.Month())-c.WorkdaysRemain(date)+1)-1)
 	}
 
-	r, err := global.DriveClient.Files.List().Q(fmt.Sprintf("name contains 'Meeting Agenda - %s'", nextMeetingDate.Format("2006/01/02"))).OrderBy("modifiedTime desc").PageSize(1).
+	r, err := client.Files.List().Q(fmt.Sprintf("name contains 'Meeting Agenda - %s'", nextMeetingDate.Format("2006/01/02"))).OrderBy("modifiedTime desc").PageSize(1).
 		Fields("files(name, webViewLink)").Do()
 	if err != nil {
 		fmt.Println("error fetching files from Drive,", err)
@@ -196,13 +199,13 @@ func FetchAgenda(brigade *global.Brigade) string {
 	}
 	var agenda *drive.File
 	if len(r.Files) == 0 {
-		r, err = global.DriveClient.Files.List().Q(fmt.Sprintf("'%s' in parents", brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
+		r, err = client.Files.List().Q(fmt.Sprintf("'%s' in parents", brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
 		if err != nil {
 			fmt.Println("error fetching files from Drive,", err)
 			return "Error fetching files from Google Drive"
 		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
-		agenda, err = global.DriveClient.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
+		agenda, err = client.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
 			fmt.Println("error creating new agenda,", err)
 			return "Error creating new agenda"

@@ -47,8 +47,10 @@ var teamWaitlist map[string]AddMemberData
 var championWaitlist map[string]AddChampionData
 
 var brigades map[string]*global.Brigade
+var client *github.Client
+var discord *discordgo.Session
 
-func Create() (*github.Client, error) {
+func Create(dg *discordgo.Session) error {
 	colorGenerator = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	tr := http.DefaultTransport
@@ -56,14 +58,15 @@ func Create() (*github.Client, error) {
 	creds, err := base64.StdEncoding.DecodeString(credsEnv)
 	if err != nil {
 		fmt.Println("error reading Drive client secret file,", err)
-		return nil, err
+		return err
 	}
 	itr, err := ghinstallation.New(tr, 31388, 1101679, creds)
 	if err != nil {
 		fmt.Println("error creating github key", err)
-		return nil, err
+		return err
 	}
-	client := github.NewClient(&http.Client{Transport: itr})
+	client = github.NewClient(&http.Client{Transport: itr})
+	discord = dg
 
 	teamWaitlist = make(map[string]AddMemberData, 0)
 
@@ -75,7 +78,7 @@ func Create() (*github.Client, error) {
 		brigades[brigade.GithubOrg] = &brigade
 	}
 
-	return client, nil
+	return nil
 }
 
 func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
@@ -108,16 +111,16 @@ func handleRepositoryCreate(repo Repository) {
 	colorInt := int(color.Red)
 	colorInt = (colorInt << 8) + int(color.Green)
 	colorInt = (colorInt << 8) + int(color.Blue)
-	championRole, err := global.DiscordClient.GuildRoleCreate(brigades[repo.Owner.Name].GuildID)
+	championRole, err := discord.GuildRoleCreate(brigades[repo.Owner.Name].GuildID)
 	if err != nil {
 		fmt.Println("error creating role for new project,", err)
 	} else {
 		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
-		if _, err = global.DiscordClient.GuildRoleEdit(brigades[repo.Owner.Name].GuildID, championRole.ID, repo.Name+"-champion", colorInt, false, rolePermission, true); err != nil {
+		if _, err = discord.GuildRoleEdit(brigades[repo.Owner.Name].GuildID, championRole.ID, repo.Name+"-champion", colorInt, false, rolePermission, true); err != nil {
 			fmt.Println("error editing role for new project,", err)
 		}
 	}
-	projectRole, err := global.DiscordClient.GuildRoleCreate(brigades[repo.Owner.Name].GuildID)
+	projectRole, err := discord.GuildRoleCreate(brigades[repo.Owner.Name].GuildID)
 	if err != nil {
 		fmt.Println("error creating role for new project,", err)
 	} else {
@@ -126,7 +129,7 @@ func handleRepositoryCreate(repo Repository) {
 		colorInt = (colorInt << 8) + int(color.Green)
 		colorInt = (colorInt << 8) + int(color.Blue)
 		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
-		if _, err = global.DiscordClient.GuildRoleEdit(brigades[repo.Owner.Name].GuildID, projectRole.ID, repo.Name, colorInt, false, rolePermission, true); err != nil {
+		if _, err = discord.GuildRoleEdit(brigades[repo.Owner.Name].GuildID, projectRole.ID, repo.Name, colorInt, false, rolePermission, true); err != nil {
 			fmt.Println("error editing role for new project,", err)
 		}
 	}
@@ -157,11 +160,11 @@ func handleRepositoryCreate(repo Repository) {
 			&everyoneOverwrite,
 		},
 	}
-	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(brigades[repo.Owner.Name].GuildID, channelCreateData); err != nil {
+	if textChannel, err := discord.GuildChannelCreateComplex(brigades[repo.Owner.Name].GuildID, channelCreateData); err != nil {
 		fmt.Println("error creating text channel for new project,", err)
 	} else {
 		// Add webhook to Discord text channel
-		if discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
+		if discordWebhook, err := discord.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
 			fmt.Println("error creating github webhook for text channel,", err)
 		} else {
 			discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
@@ -175,13 +178,13 @@ func handleRepositoryCreate(repo Repository) {
 				Events: []string{"issues"},
 			}
 
-			_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+			_, _, err = client.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
 			if err != nil {
 				fmt.Println("error creating Github webhook,", err)
 			}
 		}
 		// Send prompt to set champions in Discord text channel
-		if _, err := global.DiscordClient.ChannelMessageSend(textChannel.ID, "@admin, use `!champions "+strings.ToLower(repo.Name)+" [list of project champion mentions]` to set champions for this project"); err != nil {
+		if _, err := discord.ChannelMessageSend(textChannel.ID, "@admin, use `!champions "+strings.ToLower(repo.Name)+" [list of project champion mentions]` to set champions for this project"); err != nil {
 			fmt.Println("error sending project champions prompt")
 		}
 	}
@@ -197,10 +200,10 @@ func handleRepositoryCreate(repo Repository) {
 			&everyoneOverwrite,
 		},
 	}
-	if textChannel, err := global.DiscordClient.GuildChannelCreateComplex(brigades[repo.Owner.Name].GuildID, githubChannelCreateData); err != nil {
+	if textChannel, err := discord.GuildChannelCreateComplex(brigades[repo.Owner.Name].GuildID, githubChannelCreateData); err != nil {
 		fmt.Println("error creating github channel for new project,", err)
 	} else {
-		if discordWebhook, err := global.DiscordClient.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
+		if discordWebhook, err := discord.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
 			fmt.Println("error creating github webhook for github channel,", err)
 		} else {
 			discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
@@ -214,14 +217,14 @@ func handleRepositoryCreate(repo Repository) {
 				Events: []string{"push"},
 			}
 
-			_, _, err = global.GithubClient.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+			_, _, err = client.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
 			if err != nil {
 				fmt.Println("error creating Github webhook,", err)
 			}
 		}
 	}
 
-	if channels, err := global.DiscordClient.GuildChannels(brigades[repo.Owner.Name].GuildID); err != nil {
+	if channels, err := discord.GuildChannels(brigades[repo.Owner.Name].GuildID); err != nil {
 		fmt.Println("error fetching guild text channels,", err)
 	} else {
 		sort.Slice(channels, func(i, j int) bool {
@@ -234,7 +237,7 @@ func handleRepositoryCreate(repo Repository) {
 				i++
 			}
 		}
-		if err := global.DiscordClient.GuildChannelsReorder(brigades[repo.Owner.Name].GuildID, channels); err != nil {
+		if err := discord.GuildChannelsReorder(brigades[repo.Owner.Name].GuildID, channels); err != nil {
 			fmt.Println("error reordering guild text channels,", err)
 		}
 	}
@@ -245,11 +248,11 @@ func handleRepositoryCreate(repo Repository) {
 		Name:    repo.Name,
 		Privacy: &privacy,
 	}
-	if team, _, err := global.GithubClient.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam); err != nil {
+	if team, _, err := client.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam); err != nil {
 		fmt.Println("error creating github team for new project,", err)
 	} else {
 		options := github.TeamAddTeamRepoOptions{Permission: "push"}
-		if _, err = global.GithubClient.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
+		if _, err = client.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
 			fmt.Println("error adding repository to team,", err)
 		}
 	}
@@ -258,12 +261,12 @@ func handleRepositoryCreate(repo Repository) {
 // Chore tasks for deleting a repository
 func handleRepositoryDelete(repo Repository) {
 	// Delete Discord role
-	if roles, err := global.DiscordClient.GuildRoles(brigades[repo.Owner.Name].GuildID); err != nil {
+	if roles, err := discord.GuildRoles(brigades[repo.Owner.Name].GuildID); err != nil {
 		fmt.Println("error fetching Discord roles")
 	} else {
 		for _, role := range roles {
 			if role.Name == repo.Name || role.Name == repo.Name+"-champion" {
-				if err = global.DiscordClient.GuildRoleDelete(brigades[repo.Owner.Name].GuildID, role.ID); err != nil {
+				if err = discord.GuildRoleDelete(brigades[repo.Owner.Name].GuildID, role.ID); err != nil {
 					fmt.Println("error deleting role for deleted project,", err)
 				}
 			}
@@ -271,12 +274,12 @@ func handleRepositoryDelete(repo Repository) {
 	}
 
 	// Delete Discord channel
-	if channels, err := global.DiscordClient.GuildChannels(brigades[repo.Owner.Name].GuildID); err != nil {
+	if channels, err := discord.GuildChannels(brigades[repo.Owner.Name].GuildID); err != nil {
 		fmt.Println("error fetching Discord channels,", err)
 	} else {
 		for _, channel := range channels {
 			if strings.HasPrefix(channel.Name, repo.Name) {
-				if _, err = global.DiscordClient.ChannelDelete(channel.ID); err != nil {
+				if _, err = discord.ChannelDelete(channel.ID); err != nil {
 					fmt.Println("error deleting text channel for deleted project,", err)
 				}
 			}
@@ -290,7 +293,7 @@ func handleRepositoryDelete(repo Repository) {
 			Page:    nextPage,
 			PerPage: 100,
 		}
-		teams, res, err := global.GithubClient.Teams.ListTeams(context.Background(), repo.Owner.Name, &opt)
+		teams, res, err := client.Teams.ListTeams(context.Background(), repo.Owner.Name, &opt)
 		if err != nil {
 			fmt.Println("error fetching Github team,", err)
 			nextPage = 0
@@ -298,7 +301,7 @@ func handleRepositoryDelete(repo Repository) {
 			nextPage = res.NextPage
 			for _, team := range teams {
 				if *team.Name == repo.Name {
-					if _, err = global.GithubClient.Teams.DeleteTeam(context.Background(), *team.ID); err != nil {
+					if _, err = client.Teams.DeleteTeam(context.Background(), *team.ID); err != nil {
 						fmt.Println("error deleting github team for deleted project,", err)
 					}
 					break
@@ -338,7 +341,7 @@ func setProjectChampion(discordUser, githubName string) string {
 		Permission: "admin",
 	}
 	championSetData := championWaitlist[discordUser]
-	if _, err := global.GithubClient.Repositories.AddCollaborator(context.Background(), championSetData.Owner, championSetData.Project, githubName, &opt); err != nil {
+	if _, err := client.Repositories.AddCollaborator(context.Background(), championSetData.Owner, championSetData.Project, githubName, &opt); err != nil {
 		return "Failed to give you administrator access to " + championSetData.Project + ". Please contact a brigade captain to manually add you."
 	} else {
 		delete(championWaitlist, discordUser)
@@ -363,7 +366,7 @@ func addUserToTeam(discordUser, githubName string) string {
 			Page:    nextPage,
 			PerPage: 100,
 		}
-		teams, res, err := global.GithubClient.Teams.ListTeams(context.Background(), teamAddData.Owner, &opt)
+		teams, res, err := client.Teams.ListTeams(context.Background(), teamAddData.Owner, &opt)
 		if err != nil {
 			fmt.Println("error fetching Github team,", err)
 			nextPage = 0
@@ -372,7 +375,7 @@ func addUserToTeam(discordUser, githubName string) string {
 			for _, team := range teams {
 				if strings.ToLower(*team.Name) == strings.ToLower(teamAddData.Team) {
 					opts := github.TeamAddTeamMembershipOptions{Role: "member"}
-					if _, _, err = global.GithubClient.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
+					if _, _, err = client.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
 						fmt.Println("error adding user to github team,", err)
 						return "Failed to add you to the github team **" + teamAddData.Team + "**. Try again later."
 					}
@@ -390,7 +393,7 @@ func CreateIssue(text, repository string, brigade *global.Brigade) *string {
 	issue := github.IssueRequest{
 		Title: &text,
 	}
-	if _, _, err := global.GithubClient.Issues.Create(context.Background(), brigade.GithubOrg, repository, &issue); err != nil {
+	if _, _, err := client.Issues.Create(context.Background(), brigade.GithubOrg, repository, &issue); err != nil {
 		fmt.Println("error creating github issue,", err)
 		msg := "Failed to create issue"
 		return &msg

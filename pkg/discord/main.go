@@ -506,7 +506,7 @@ func setChampions(data CommandData) {
 	users := data.Args[1:]
 	for _, user := range users {
 		userID := strings.TrimSuffix(strings.TrimPrefix(user, "<@"), ">")
-		discordUser, err := data.Session.User(userID);
+		discordUser, err := data.Session.User(userID)
 		if err != nil {
 			if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to find user "+user); err != nil {
 				fmt.Println("error sending failed to find user message,", err)
