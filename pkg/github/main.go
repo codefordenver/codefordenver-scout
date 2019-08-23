@@ -121,10 +121,10 @@ func handleRepositoryCreate(repo Repository) {
 					fmt.Println("error fetching Discord roles,", err)
 				} else {
 					for _, role := range roles {
-						if role.Name == repo.Name {
+						if strings.ToLower(role.Name) == textChannel.Name {
 							projectRole = role
 						}
-						if role.Name == repo.Name+"-champion" {
+						if strings.ToLower(role.Name) == textChannel.Name+"-champion" {
 							championRole = role
 						}
 					}
