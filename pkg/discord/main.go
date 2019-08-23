@@ -261,14 +261,14 @@ func Create() (*discordgo.Session, error) {
 		MaxArgs:    1,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
-	decomissionProjectCommand := Command{
-		Keyword:    "decomission",
-		Handler:    decomissionProject,
+	maintainProjectCommand := Command{
+		Keyword:    "maintain",
+		Handler:    maintainProject,
 		Permission: PermissionAdmin,
 		MinArgs:    1,
 		MaxArgs:    1,
 	}
-	cmdHandler.RegisterCommand(decomissionProjectCommand)
+	cmdHandler.RegisterCommand(maintainProjectCommand)
 
 	brigades = make(map[string]*global.Brigade, 0)
 
@@ -670,8 +670,8 @@ func fetchFile(data CommandData) (*FileRecord, error) {
 	return nil, err
 }
 
-// Decomission(archive) a project on Github and Discord
-func decomissionProject(data CommandData) {
+// Move project to maintenance
+func maintainProject(data CommandData) {
 	projectName := data.Args[0]
 	guild, err := data.Session.Guild(data.GuildID)
 	if err != nil {
@@ -691,7 +691,7 @@ func decomissionProject(data CommandData) {
 	}
 	if githubChannel == nil || channel == nil {
 		fmt.Println("error fetching project channels,", err)
-		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to decomission **"+projectName+"**. Please try again later."); err != nil {
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to move **"+projectName+"** to maintenance. Please try again later."); err != nil {
 			fmt.Println("error sending channel message,", err)
 		}
 		return
@@ -711,7 +711,7 @@ func decomissionProject(data CommandData) {
 			fmt.Println("error sending channel message,", err)
 		}
 	}
-	if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Successfully decomissioned  **"+projectName+"**."); err != nil {
+	if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Successfully moved  **"+projectName+"** to maintenance."); err != nil {
 		fmt.Println("error sending channel message,", err)
 	}
 }
