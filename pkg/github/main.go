@@ -106,31 +106,60 @@ func HandleRepositoryEvent(w http.ResponseWriter, r *http.Request) {
 
 // Chore tasks for creating a repository
 func handleRepositoryCreate(repo Repository) {
-	// Create Discord roles
-	color := noire.NewRGB(float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)))
-	colorInt := int(color.Red)
-	colorInt = (colorInt << 8) + int(color.Green)
-	colorInt = (colorInt << 8) + int(color.Blue)
-	championRole, err := discord.GuildRoleCreate(brigades[repo.Owner.Name].GuildID)
-	if err != nil {
-		fmt.Println("error creating role for new project,", err)
+	projectExists := false
+	var championRole *discordgo.Role
+	var projectRole *discordgo.Role
+	var textChannel *discordgo.Channel
+	if channels, err := discord.GuildChannels(brigades[repo.Owner.Name].GuildID); err != nil {
+		fmt.Println("error fetching guild channels,", err)
 	} else {
-		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
-		if _, err = discord.GuildRoleEdit(brigades[repo.Owner.Name].GuildID, championRole.ID, repo.Name+"-champion", colorInt, false, rolePermission, true); err != nil {
-			fmt.Println("error editing role for new project,", err)
+		for _, channel := range channels {
+			if channel.ParentID == brigades[repo.Owner.Name].ActiveProjectCategoryID && strings.Contains(strings.ToLower(repo.Name), channel.Name) {
+				projectExists = true
+				textChannel = channel
+				if roles, err := discord.GuildRoles(brigades[repo.Owner.Name].GuildID); err != nil {
+					fmt.Println("error fetching Discord roles,", err)
+				} else {
+					for _, role := range roles {
+						if role.Name == repo.Name {
+							projectRole = role
+						}
+						if role.Name == repo.Name+"-champion" {
+							championRole = role
+						}
+					}
+				}
+			}
 		}
 	}
-	projectRole, err := discord.GuildRoleCreate(brigades[repo.Owner.Name].GuildID)
-	if err != nil {
-		fmt.Println("error creating role for new project,", err)
-	} else {
-		color = color.Lighten(.25)
-		colorInt := int(color.Red)
-		colorInt = (colorInt << 8) + int(color.Green)
-		colorInt = (colorInt << 8) + int(color.Blue)
-		rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
-		if _, err = discord.GuildRoleEdit(brigades[repo.Owner.Name].GuildID, projectRole.ID, repo.Name, colorInt, false, rolePermission, true); err != nil {
-			fmt.Println("error editing role for new project,", err)
+	// Create Discord roles
+	if !projectExists {
+		c := noire.NewRGB(float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)), float64(colorGenerator.Intn(256)))
+		colorInt := int(c.Red)
+		colorInt = (colorInt << 8) + int(c.Green)
+		colorInt = (colorInt << 8) + int(c.Blue)
+		var err error
+		championRole, err = discord.GuildRoleCreate(brigades[repo.Owner.Name].GuildID)
+		if err != nil {
+			fmt.Println("error creating role for new project,", err)
+		} else {
+			rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
+			if _, err = discord.GuildRoleEdit(brigades[repo.Owner.Name].GuildID, championRole.ID, repo.Name+"-champion", colorInt, false, rolePermission, true); err != nil {
+				fmt.Println("error editing role for new project,", err)
+			}
+		}
+		projectRole, err = discord.GuildRoleCreate(brigades[repo.Owner.Name].GuildID)
+		if err != nil {
+			fmt.Println("error creating role for new project,", err)
+		} else {
+			c = c.Lighten(.25)
+			colorInt := int(c.Red)
+			colorInt = (colorInt << 8) + int(c.Green)
+			colorInt = (colorInt << 8) + int(c.Blue)
+			rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
+			if _, err = discord.GuildRoleEdit(brigades[repo.Owner.Name].GuildID, projectRole.ID, repo.Name, colorInt, false, rolePermission, true); err != nil {
+				fmt.Println("error editing role for new project,", err)
+			}
 		}
 	}
 
@@ -160,35 +189,39 @@ func handleRepositoryCreate(repo Repository) {
 			&everyoneOverwrite,
 		},
 	}
-	if textChannel, err := discord.GuildChannelCreateComplex(brigades[repo.Owner.Name].GuildID, channelCreateData); err != nil {
-		fmt.Println("error creating text channel for new project,", err)
-	} else {
-		// Add webhook to Discord text channel
-		if discordWebhook, err := discord.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
-			fmt.Println("error creating github webhook for text channel,", err)
-		} else {
-			discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
-			githubHookName := "web"
-			githubHookConfig := make(map[string]interface{})
-			githubHookConfig["content_type"] = "json"
-			githubHookConfig["url"] = discordWebhookURL
-			githubHook := github.Hook{
-				Name:   &githubHookName,
-				Config: githubHookConfig,
-				Events: []string{"issues"},
-			}
-
-			_, _, err = client.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
-			if err != nil {
-				fmt.Println("error creating Github webhook,", err)
-			}
-		}
-		// Send prompt to set champions in Discord text channel
-		if _, err := discord.ChannelMessageSend(textChannel.ID, "@admin, use `!champions "+strings.ToLower(repo.Name)+" [list of project champion mentions]` to set champions for this project"); err != nil {
-			fmt.Println("error sending project champions prompt")
+	if !projectExists {
+		var err error
+		textChannel, err = discord.GuildChannelCreateComplex(brigades[repo.Owner.Name].GuildID, channelCreateData)
+		if err != nil {
+			fmt.Println("error creating text channel for new project,", err)
 		}
 	}
+	// Add webhook to Discord text channel
+	if discordWebhook, err := discord.WebhookCreate(textChannel.ID, "github-webhook", ""); err != nil {
+		fmt.Println("error creating github webhook for text channel,", err)
+	} else {
+		discordWebhookURL := fmt.Sprintf("https://discordapp.com/api/webhooks/%v/%v/github", discordWebhook.ID, discordWebhook.Token)
+		githubHookName := "web"
+		githubHookConfig := make(map[string]interface{})
+		githubHookConfig["content_type"] = "json"
+		githubHookConfig["url"] = discordWebhookURL
+		githubHook := github.Hook{
+			Name:   &githubHookName,
+			Config: githubHookConfig,
+			Events: []string{"issues"},
+		}
 
+		_, _, err = client.Repositories.CreateHook(context.Background(), repo.Owner.Name, repo.Name, &githubHook)
+		if err != nil {
+			fmt.Println("error creating Github webhook,", err)
+		}
+	}
+	if !projectExists {
+		// Send prompt to set champions in Discord text channel
+		if _, err := discord.ChannelMessageSend(textChannel.ID, "@admin, use `!champions "+strings.ToLower(repo.Name)+" [list of project champion mentions]` to set champions for this project"); err != nil {
+			fmt.Println("error sending project champions prompt", err)
+		}
+	}
 	//Create Discord github channel
 	githubChannelCreateData := discordgo.GuildChannelCreateData{
 		Name:     repo.Name + "-github",
@@ -243,17 +276,19 @@ func handleRepositoryCreate(repo Repository) {
 	}
 
 	// Create Github team
-	privacy := "closed"
-	newTeam := github.NewTeam{
-		Name:    repo.Name,
-		Privacy: &privacy,
-	}
-	if team, _, err := client.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam); err != nil {
-		fmt.Println("error creating github team for new project,", err)
-	} else {
-		options := github.TeamAddTeamRepoOptions{Permission: "push"}
-		if _, err = client.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
-			fmt.Println("error adding repository to team,", err)
+	if !projectExists {
+		privacy := "closed"
+		newTeam := github.NewTeam{
+			Name:    repo.Name,
+			Privacy: &privacy,
+		}
+		if team, _, err := client.Teams.CreateTeam(context.Background(), repo.Owner.Name, newTeam); err != nil {
+			fmt.Println("error creating github team for new project,", err)
+		} else {
+			options := github.TeamAddTeamRepoOptions{Permission: "push"}
+			if _, err = client.Teams.AddTeamRepo(context.Background(), *team.ID, repo.Owner.Name, repo.Name, &options); err != nil {
+				fmt.Println("error adding repository to team,", err)
+			}
 		}
 	}
 }
@@ -262,7 +297,7 @@ func handleRepositoryCreate(repo Repository) {
 func handleRepositoryDelete(repo Repository) {
 	// Delete Discord role
 	if roles, err := discord.GuildRoles(brigades[repo.Owner.Name].GuildID); err != nil {
-		fmt.Println("error fetching Discord roles")
+		fmt.Println("error fetching Discord roles", err)
 	} else {
 		for _, role := range roles {
 			if role.Name == repo.Name || role.Name == repo.Name+"-champion" {

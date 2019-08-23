@@ -12,7 +12,7 @@ require (
 	github.com/bradleyfalzon/ghinstallation v0.1.2
 	github.com/brianloveswords/airtable v0.0.0-20180329193050-a39294038dd9
 	github.com/bwmarrin/discordgo v0.19.0
-	github.com/fatih/color v1.7.0 // indirect
+	github.com/fatih/color v1.7.0
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/google/go-querystring v1.0.0 // indirect
 	github.com/goware/prefixer v0.0.0-20160118172347-395022866408 // indirect
