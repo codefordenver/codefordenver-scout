@@ -30,41 +30,39 @@ func main() {
 	config, err := decrypt.File("config.yaml", "yaml")
 	if err != nil {
 		log.Fatal("error decoding configuration, ", err)
-		return
 	}
 
 	var b Brigades
 
 	if err = yaml.Unmarshal(config, &b); err != nil {
 		log.Fatal("error parsing configuration file,", err)
-		return
 	}
 
 	global.Brigades = b.Brigades
 
-	global.DriveClient, err = gdrive.Create()
+	err = gdrive.Create()
 	if err != nil {
 		log.Fatal("error creating Google Drive session, ", err)
-		return
 	}
 
-	global.GithubClient, err = github.Create()
-
-	global.DiscordClient, err = discord.Create()
+	dg, err := discord.Create()
 	if err != nil {
 		log.Fatal("error creating Discord session,", err)
-		return
 	}
 
-	global.DiscordClient.AddHandler(discord.MessageCreate)
-	global.DiscordClient.AddHandler(discord.UserJoin)
-	global.DiscordClient.AddHandler(discord.ConnectToGuild)
-	global.DiscordClient.AddHandler(discord.UserReact)
+	err = github.Create(dg)
+	if err != nil {
+		log.Fatal("error creating Github session,", err)
+	}
 
-	err = global.DiscordClient.Open()
+	dg.AddHandler(discord.MessageCreate)
+	dg.AddHandler(discord.UserJoin)
+	dg.AddHandler(discord.ConnectToGuild)
+	dg.AddHandler(discord.UserReact)
+
+	err = dg.Open()
 	if err != nil {
 		log.Fatal("error opening connection,", err)
-		return
 	}
 
 	port := os.Getenv("PORT")
@@ -88,7 +86,7 @@ func main() {
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt, os.Kill)
 	<-sc
 
-	if err = global.DiscordClient.Close(); err != nil {
+	if err = dg.Close(); err != nil {
 		fmt.Println("error closing Discord session, ", err)
 	}
 

@@ -1,11 +1,5 @@
 package global
 
-import (
-	"github.com/bwmarrin/discordgo"
-	"github.com/google/go-github/github"
-	"google.golang.org/api/drive/v3"
-)
-
 type Brigade struct {
 	// Discord config
 	GuildID                string `yaml:"GuildID"`
@@ -30,7 +24,4 @@ var (
 	LocationString string
 	AirtableKey    string
 	Brigades       []Brigade
-	DriveClient    *drive.Service
-	GithubClient   *github.Client
-	DiscordClient  *discordgo.Session
 )
