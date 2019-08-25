@@ -11,6 +11,7 @@ Commands:
 - `!list-projects` - Messages the user a list of available projects
 - `!join [project name]` - Adds user to the project
 - `!leave [project name]` - Removes user from the project
+- `!maintain [project name]` - Moves a project to maintenance
 - `!track [file name] [link]` - Adds the file to Airtable
 - `!untrack [file name]` - Removes the file from Airtable
 - `!fetch [file name]` - Fetches a file specified in Airtable
@@ -40,7 +41,7 @@ Example config.yaml:
 ```yaml
 Brigades:
 -   GuildID: "5356701682701XXXXX"
-    ProjectCategoryID: "5356777664573XXXXX"
+    ActiveProjectCategoryID: "5356777664573XXXXX"
     EveryoneRole: "5356701682701XXXXX" #Yes, this is the same as the GuildID, they are separated for clarity
     NewRole: "5738722616191XXXXX"
     OnboardingRole: "5783212265866XXXXX"

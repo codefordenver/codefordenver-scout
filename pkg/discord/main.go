@@ -261,6 +261,14 @@ func Create() (*discordgo.Session, error) {
 		MaxArgs:    1,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
+	maintainProjectCommand := Command{
+		Keyword:    "maintain",
+		Handler:    maintainProject,
+		Permission: PermissionAdmin,
+		MinArgs:    1,
+		MaxArgs:    1,
+	}
+	cmdHandler.RegisterCommand(maintainProjectCommand)
 
 	brigades = make(map[string]*global.Brigade, 0)
 
@@ -274,8 +282,7 @@ func Create() (*discordgo.Session, error) {
 // When the bot connects to a server, record the number of uses on the onboarding invite, set role IDs.
 func ConnectToGuild(s *discordgo.Session, r *discordgo.Ready) {
 	for _, guild := range r.Guilds {
-		invites, err := s.GuildInvites(guild.ID)
-		if err != nil {
+		if invites, err := s.GuildInvites(guild.ID); err != nil {
 			fmt.Println("error fetching guild invites,", err)
 		} else {
 			for _, invite := range invites {
@@ -325,7 +332,7 @@ func UserReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 		}
 		return
 	}
-	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == brigades[m.GuildID].ProjectCategoryID && m.Emoji.Name == brigades[m.GuildID].IssueEmoji {
+	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == brigades[m.GuildID].ActiveProjectCategoryID && m.Emoji.Name == brigades[m.GuildID].IssueEmoji {
 		if msg, err := s.ChannelMessage(m.ChannelID, m.MessageID); err != nil {
 			fmt.Println("error fetching message to create issue,", err)
 		} else {
@@ -449,7 +456,7 @@ func listProjects(data CommandData) {
 	} else {
 		projectsMessage := "Current projects at `" + "codefordenver" + "`:"
 		for _, channel := range channels {
-			if channel.ParentID == brigades[data.GuildID].ProjectCategoryID {
+			if channel.ParentID == brigades[data.GuildID].ActiveProjectCategoryID {
 				projectsMessage += "\n" + channel.Name
 			}
 		}
@@ -661,6 +668,52 @@ func fetchFile(data CommandData) (*FileRecord, error) {
 		return nil, nil
 	}
 	return nil, err
+}
+
+// Move project to maintenance
+func maintainProject(data CommandData) {
+	projectName := data.Args[0]
+	guild, err := data.Session.Guild(data.GuildID)
+	if err != nil {
+		fmt.Println("error fetching guild,", err)
+		return
+	}
+	var channel, githubChannel *discordgo.Channel
+	for _, ch := range guild.Channels {
+		if strings.ToLower(projectName) == ch.Name {
+			channel = ch
+		} else if strings.ToLower(projectName) == strings.TrimSuffix(ch.Name, "-github") {
+			githubChannel = ch
+		}
+		if channel != nil && githubChannel != nil {
+			break
+		}
+	}
+	if githubChannel == nil || channel == nil {
+		fmt.Println("error fetching project channels,", err)
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to move **"+projectName+"** to maintenance. Please try again later."); err != nil {
+			fmt.Println("error sending channel message,", err)
+		}
+		return
+	}
+	if _, err = data.Session.ChannelDelete(githubChannel.ID); err != nil {
+		fmt.Println("error deleting channel,", err)
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to delete github channel for  **"+projectName+"**. Perform this action manually."); err != nil {
+			fmt.Println("error sending channel message,", err)
+		}
+	}
+	editData := discordgo.ChannelEdit{
+		ParentID: brigades[data.GuildID].InactiveProjectCategoryID,
+	}
+	if _, err = data.Session.ChannelEditComplex(channel.ID, &editData); err != nil {
+		fmt.Println("error editing channel,", err)
+		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to move discussion channel for  **"+projectName+"**. Perform this action manually."); err != nil {
+			fmt.Println("error sending channel message,", err)
+		}
+	}
+	if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Successfully moved  **"+projectName+"** to maintenance."); err != nil {
+		fmt.Println("error sending channel message,", err)
+	}
 }
 
 func contains(slice []string, value string) bool {

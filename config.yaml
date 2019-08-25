@@ -1,6 +1,7 @@
 Brigades:
 -   GuildID: ENC[AES256_GCM,data:qj9yBI0bwvNJVDenjFj/Qast,iv:9PVtQ4vBSm4Lfgnvkr6zMBSjSmNB2Txr8i0xA56wlgs=,tag:m1tZ+8IJwVtVC5ZOZds05w==,type:str]
-    ProjectCategoryID: ENC[AES256_GCM,data:HqwsXuRWl/p5VTlzTR2xElGb,iv:V566orpyc1MqgskE5yKFRpigaoSW0FFkGNFlW7seISY=,tag:eAq2+UcWLLNAR86ZanHYhA==,type:str]
+    ActiveProjectCategoryID: ENC[AES256_GCM,data:Eb6B59gEKolwxSwqLLCFHQhE,iv:RosduGTPA9mjDT/JomNZDdacxj0L0VqajJZ1g2RB634=,tag:t+yCmRUwttLDjLydmxlkLg==,type:str]
+    InactiveProjectCategoryID: ENC[AES256_GCM,data:K+ADpCXCtiF84CWkvh/XmbB0,iv:0yWweYwzpAJ+j1VietPdAxD+TzUdfEifuAgiR75zRz4=,tag:97Mvyb01EbPzG0KvftMJDA==,type:str]
     EveryoneRole: ENC[AES256_GCM,data:o1ciEubG1mOUsFK5nv904gJg,iv:AIMdG90Kggx7etvWy9wy9TyxrXqvKTThwDiy3vmscQY=,tag:GDQOwTBFx7oRkPw2bcGAmg==,type:str]
     #ENC[AES256_GCM,data:9ePW149sujIAIITJ2uvPkQ3mf6bMcvAn7SEvOX4ZHbgb8FhSCkP3IP1jTtfk5O8HKu8uz9l/lxK/wFCJlXDfQX/tA1s=,iv:AIFG8FEwGcGS0uq8d2qYXcc/Lms5LFGiO2BUuzS3G9E=,tag:BZLVCJS0jn/kenS/PPamiQ==,type:comment]
     NewRole: ENC[AES256_GCM,data:hlQBqzaI4L8mPNt//fTIL7gp,iv:U5JGWcUhjLMMVFvO9esx+RDh3DJTaXw98Kmm87n+lkM=,tag:IAe2FX7baCFZ9hDPC5UxrQ==,type:str]
@@ -24,8 +25,8 @@ sops:
         aws_profile: ""
     gcp_kms: []
     azure_kv: []
-    lastmodified: '2019-08-16T01:11:23Z'
-    mac: ENC[AES256_GCM,data:zQTy6EJAfYYDc33yYiglmed+8KsnoiQpDcym05b7k2OaNco0uqx5wOYuXft8uwskV1CV5DTrrfsPzjM3NIqG9mzc4dP6FwqYg+0+lzBRO7ki2NjFT3FVsUDaxd4O3Mo3jOC80T4RmlN1WLOuRZ2QEWcnPKQYEdpO93OGijckWRs=,iv:TIYZE7XLGZ7VDWDp+EiGSbH88vU7OA+WIcQ4KL7sALQ=,tag:cUToM6hyEIm8n5Tt9IU3dw==,type:str]
+    lastmodified: '2019-08-23T01:37:53Z'
+    mac: ENC[AES256_GCM,data:ullFntQW9Th80dCybAbJb6Odwdd2LPFN68G7DkIj4B0LrNstu2v5nFsyl+E9OsIC0aP9fPM4tT1HkffS8mjq0hVwkzY20bsQ92W8vHbadkwsIyCm65URrd9DiUc5qRI/wYOMWq/qiIT4jpQPJyd5W3dTaZi7NjAIt0qkLjko6U8=,iv:A3MhSeIjqm5BUOVGwERLgIyi7GJ5MVoy4d/kwX6jrSk=,tag:Oq1SvcuzDU1UPgC+AQQraA==,type:str]
     pgp: []
     unencrypted_suffix: _unencrypted
     version: 3.3.1
