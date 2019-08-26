@@ -194,20 +194,20 @@ func FetchAgenda(brigade *global.Brigade) string {
 	r, err := client.Files.List().Q(fmt.Sprintf("name contains 'Meeting Agenda - %s'", nextMeetingDate.Format("2006/01/02"))).OrderBy("modifiedTime desc").PageSize(1).
 		Fields("files(name, webViewLink)").Do()
 	if err != nil {
-		fmt.Println("error fetching files from Drive,", err)
+		fmt.Println("error fetching files,", err)
 		return "Error fetching files from Google Drive"
 	}
 	var agenda *drive.File
 	if len(r.Files) == 0 {
 		r, err = client.Files.List().Q(fmt.Sprintf("'%s' in parents", brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
 		if err != nil {
-			fmt.Println("error fetching files from Drive,", err)
+			fmt.Println("error fetching files,", err)
 			return "Error fetching files from Google Drive"
 		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
 		agenda, err = client.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
-			fmt.Println("error creating new agenda,", err)
+			fmt.Println("error copying file,", err)
 			return "Error creating new agenda"
 		}
 	} else {

@@ -152,7 +152,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 		return nil
 	} else {
 		if _, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Unrecognized command, %v", key)); err != nil {
-			fmt.Println("error sending unrecognized command message,", err)
+			fmt.Println("error sending channel message,", err)
 			return err
 		}
 		return nil
@@ -309,7 +309,7 @@ func UserJoin(s *discordgo.Session, g *discordgo.GuildMemberAdd) {
 			if brigades[guildID].InviteCount != invite.Uses {
 				brigades[guildID].InviteCount = invite.Uses
 				if err := s.GuildMemberRoleAdd(guildID, user.ID, brigades[g.GuildID].OnboardingRole); err != nil {
-					fmt.Println("error adding role,", err)
+					fmt.Println("error adding guild role,", err)
 					return
 				}
 				return
@@ -323,28 +323,28 @@ func UserReact(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 	if m.MessageID == brigades[m.GuildID].CodeOfConductMessageID {
 		member, err := s.GuildMember(m.GuildID, m.UserID)
 		if err != nil {
-			fmt.Println("error fetching member who reacted,", err)
+			fmt.Println("error fetching guild member,", err)
 		}
 		if contains(member.Roles, brigades[m.GuildID].NewRole) || contains(member.Roles, brigades[m.GuildID].OnboardingRole) || contains(member.Roles, brigades[m.GuildID].MemberRole) {
 			return
 		} else if err = s.GuildMemberRoleAdd(m.GuildID, m.UserID, brigades[m.GuildID].NewRole); err != nil {
-			fmt.Println("error adding role,", err)
+			fmt.Println("error adding guild role,", err)
 		}
 		return
 	}
 	if channel, err := s.Channel(m.ChannelID); err == nil && channel.Type == discordgo.ChannelTypeGuildText && channel.ParentID == brigades[m.GuildID].ActiveProjectCategoryID && m.Emoji.Name == brigades[m.GuildID].IssueEmoji {
 		if msg, err := s.ChannelMessage(m.ChannelID, m.MessageID); err != nil {
-			fmt.Println("error fetching message to create issue,", err)
+			fmt.Println("error fetching channel message,", err)
 		} else {
 			errorMessage := github.CreateIssue(msg.Content, channel.Name, brigades[m.GuildID])
 			if errorMessage != nil {
 				if _, err := s.ChannelMessageSend(m.ChannelID, *errorMessage); err != nil {
-					fmt.Println("error sending issue status,", err)
+					fmt.Println("error sending channel message,", err)
 				}
 			}
 		}
 	} else if err != nil {
-		fmt.Println("error getting channel to create issue,", err)
+		fmt.Println("error fetching guild channel,", err)
 	}
 }
 
@@ -355,10 +355,10 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 	}
 	if strings.HasPrefix(m.Content, "!") || containsUser(m.Mentions, s.State.User) {
 		if channel, err := s.Channel(m.ChannelID); err != nil {
-			fmt.Println("error fetching command channel,", err)
+			fmt.Println("error fetching guild channel,", err)
 		} else if channel.Type == discordgo.ChannelTypeGuildText {
 			if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
-				fmt.Println("error deleting command message,", err)
+				fmt.Println("error deleting channel message,", err)
 			}
 		}
 		commandText := strings.TrimPrefix(m.Content, "!")
@@ -390,7 +390,7 @@ func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
 	if err != nil {
 		fmt.Println("error fetching guild,", err)
 		if _, err := s.ChannelMessageSend(msgData.ChannelID, "Failed to onboard users. Please try again later."); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 		return
 	}
@@ -399,11 +399,11 @@ func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
 		for _, role := range r {
 			if contains(member.Roles, role) {
 				if err = s.GuildMemberRoleRemove(guildID, member.User.ID, role); err != nil {
-					fmt.Println("error removing role,", err)
+					fmt.Println("error removing guild role,", err)
 					break
 				}
 				if err = s.GuildMemberRoleAdd(guildID, member.User.ID, brigades[msgData.GuildID].MemberRole); err != nil {
-					fmt.Println("error adding member role,", err)
+					fmt.Println("error adding guild role,", err)
 					break
 				}
 				onboardedUsers = append(onboardedUsers, member.User)
@@ -436,7 +436,7 @@ func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
 		confirmMessageContent = "No users to onboard"
 	}
 	if _, err = s.ChannelMessageSend(msgData.ChannelID, confirmMessageContent); err != nil {
-		fmt.Println("error sending onboarding confirmation message,", err)
+		fmt.Println("error sending channel message,", err)
 	}
 
 }
@@ -445,7 +445,7 @@ func onboardGroup(s *discordgo.Session, msgData MessageData, r ...string) {
 func getAgenda(data CommandData) {
 	message := gdrive.FetchAgenda(brigades[data.GuildID])
 	if _, err := data.Session.ChannelMessageSend(data.ChannelID, message); err != nil {
-		fmt.Println("error sending agenda message,", err)
+		fmt.Println("error sending channel message,", err)
 	}
 }
 
@@ -463,7 +463,7 @@ func listProjects(data CommandData) {
 		if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
 			fmt.Println("error creating DM channel,", err)
 		} else if _, err := data.Session.ChannelMessageSend(channel.ID, projectsMessage); err != nil {
-			fmt.Println("error sending projects list,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 	}
 }
@@ -477,7 +477,7 @@ func joinProject(data CommandData) {
 		for _, role := range roles {
 			if strings.ToLower(role.Name) == strings.ToLower(projectName) {
 				if err := data.Session.GuildMemberRoleAdd(data.GuildID, data.Author.ID, role.ID); err != nil {
-					fmt.Println("error adding member role,", err)
+					fmt.Println("error adding guild role,", err)
 				}
 			}
 		}
@@ -500,7 +500,7 @@ func leaveProject(data CommandData) {
 		for _, role := range roles {
 			if strings.HasPrefix(strings.ToLower(role.Name), strings.ToLower(projectName)) {
 				if err := data.Session.GuildMemberRoleRemove(data.MessageData.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
-					fmt.Println("error adding member role,", err)
+					fmt.Println("error adding guild role,", err)
 				}
 			}
 		}
@@ -516,7 +516,7 @@ func setChampions(data CommandData) {
 		discordUser, err := data.Session.User(userID)
 		if err != nil {
 			if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to find user "+user); err != nil {
-				fmt.Println("error sending failed to find user message,", err)
+				fmt.Println("error sending channel message,", err)
 			}
 			return
 		}
@@ -526,7 +526,7 @@ func setChampions(data CommandData) {
 			for _, role := range roles {
 				if strings.ToLower(role.Name) == strings.ToLower(projectName)+"-champion" {
 					if err := data.Session.GuildMemberRoleAdd(data.GuildID, discordUser.ID, role.ID); err != nil {
-						fmt.Println("error adding member role,", err)
+						fmt.Println("error adding guild role,", err)
 					}
 				}
 			}
@@ -573,12 +573,12 @@ func trackFile(data CommandData) {
 	file, err := fetchFile(data)
 	if file != nil {
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "A file with the name **"+fileName+"** is already tracked: "+file.Fields.Link); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 		return
 	} else if err != nil {
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to check if a file with the name **"+fileName+"** is already tracked."); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 		return
 	}
@@ -593,13 +593,13 @@ func trackFile(data CommandData) {
 		},
 	}
 	if err := files.Create(&newRecord); err != nil {
-		fmt.Println("error creating new airtable record,", err)
+		fmt.Println("error creating airtable record,", err)
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to track new file. Try again later."); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 	} else {
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "File successfully tracked. Use `!fetch "+fileName+"` to retrieve it, or `!untrack "+fileName+"` to untrack it."); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 	}
 }
@@ -614,22 +614,22 @@ func untrackFile(data CommandData) {
 	file, err := fetchFile(data)
 	if file == nil {
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "No file with the name **"+fileName+"** is tracked."); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 		return
 	} else if err != nil {
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to check if a file with the name **"+fileName+"** is already tracked."); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 		return
 	}
 	if err = files.Delete(file); err != nil {
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to untrack **"+fileName+"**. Try again later."); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 	} else {
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Successfully untracked **"+fileName+"**."); err != nil {
-			fmt.Println("error sending message to channel,", err)
+			fmt.Println("error sending channel message,", err)
 		}
 	}
 }
@@ -646,7 +646,7 @@ func fetchFileDispatch(data CommandData) {
 		msg = "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it"
 	}
 	if _, err := data.Session.ChannelMessageSend(data.ChannelID, msg); err != nil {
-		fmt.Println("error sending message to channel,", err)
+		fmt.Println("error sending channel message,", err)
 	}
 }
 
@@ -690,14 +690,14 @@ func maintainProject(data CommandData) {
 		}
 	}
 	if githubChannel == nil || channel == nil {
-		fmt.Println("error fetching project channels,", err)
+		fmt.Println("error fetching guild channels,", err)
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to move **"+projectName+"** to maintenance. Please try again later."); err != nil {
 			fmt.Println("error sending channel message,", err)
 		}
 		return
 	}
 	if _, err = data.Session.ChannelDelete(githubChannel.ID); err != nil {
-		fmt.Println("error deleting channel,", err)
+		fmt.Println("error deleting guild channel,", err)
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to delete github channel for  **"+projectName+"**. Perform this action manually."); err != nil {
 			fmt.Println("error sending channel message,", err)
 		}
@@ -706,7 +706,7 @@ func maintainProject(data CommandData) {
 		ParentID: brigades[data.GuildID].InactiveProjectCategoryID,
 	}
 	if _, err = data.Session.ChannelEditComplex(channel.ID, &editData); err != nil {
-		fmt.Println("error editing channel,", err)
+		fmt.Println("error editing guild channel,", err)
 		if _, err := data.Session.ChannelMessageSend(data.ChannelID, "Failed to move discussion channel for  **"+projectName+"**. Perform this action manually."); err != nil {
 			fmt.Println("error sending channel message,", err)
 		}
