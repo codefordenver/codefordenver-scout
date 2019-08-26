@@ -55,6 +55,8 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 	key := args[0]
 	if len(args) > 1 {
 		args = args[1:]
+	} else {
+		args = []string{}
 	}
 	msgData := MessageData{
 		ChannelID: m.ChannelID,
