@@ -54,10 +54,10 @@ func Create(dg *discordgo.Session) error {
 	colorGenerator = rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	tr := http.DefaultTransport
-	credsEnv := os.Getenv("GitHub_CREDS")
+	credsEnv := os.Getenv("GITHUB_CREDS")
 	creds, err := base64.StdEncoding.DecodeString(credsEnv)
 	if err != nil {
-		fmt.Println("error reading Drive client secret file,", err)
+		fmt.Println("error reading GitHub client secret file,", err)
 		return err
 	}
 	itr, err := ghinstallation.New(tr, 31388, 1101679, creds)
