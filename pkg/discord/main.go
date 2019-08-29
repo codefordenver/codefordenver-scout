@@ -747,10 +747,9 @@ func containsUser(slice []*discordgo.User, value *discordgo.User) bool {
 	return false
 }
 
-func orEmpty(defaultString, ifEmpty string) string {
-	if defaultString == "" {
-		return ifEmpty
-	} else {
-		return defaultString
+func orEmpty(str, defaultStr string) string {
+	if str == "" {
+		return defaultStr
 	}
+	return str
 }
