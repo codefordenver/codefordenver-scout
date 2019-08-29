@@ -42,17 +42,17 @@ func main() {
 
 	err = gdrive.Create()
 	if err != nil {
-		log.Fatal("error creating Google Drive session, ", err)
+		return
 	}
 
 	dg, err := discord.Create()
 	if err != nil {
-		log.Fatal("error creating Discord session,", err)
+		return
 	}
 
 	err = github.Create(dg)
 	if err != nil {
-		log.Fatal("error creating Github session,", err)
+		return
 	}
 
 	dg.AddHandler(discord.MessageCreate)
