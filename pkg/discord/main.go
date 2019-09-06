@@ -500,8 +500,8 @@ func joinProject(data CommandData) []string {
 			if strings.ToLower(role.Name) == strings.ToLower(projectName) {
 				if err := data.Session.GuildMemberRoleAdd(data.GuildID, data.Author.ID, role.ID); err != nil {
 					fmt.Println("error adding guild role,", err)
+					return []string{"Failed to add **" + role.Name + "** role to " + data.Author.Username + ". Have an administrator to add it manually."}
 				}
-				return []string{"Failed to add **" + role.Name + "**."}
 			}
 		}
 		if channel, err := data.Session.UserChannelCreate(data.Author.ID); err != nil {
