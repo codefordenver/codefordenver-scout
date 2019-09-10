@@ -212,7 +212,7 @@ func Create() (*discordgo.Session, error) {
 	getAgendaCommand := Command{
 		Keyword:    "agenda",
 		Handler:    getAgenda,
-		Permission: PermissionAll,
+		Permission: PermissionChannel,
 		MinArgs:    0,
 		MaxArgs:    0,
 	}
