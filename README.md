@@ -33,7 +33,6 @@ AIRTABLE_API_KEY=Airtable account key
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
-SCOUT_LOCATION_STRING=TZ data location string
 ```
 Get these values from a current project member
 

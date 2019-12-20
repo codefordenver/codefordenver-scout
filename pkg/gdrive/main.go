@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/codefordenver/scout/global"
+	"github.com/codefordenver/codefordenver-scout/global"
 	"github.com/rickar/cal"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
@@ -18,7 +18,7 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
-var c *cal.Calendar
+var calendars map[*global.Brigade]*cal.Calendar
 
 func Monday(date time.Time) time.Time {
 	weekdayInt := int(date.Weekday())
@@ -30,19 +30,14 @@ func Monday(date time.Time) time.Time {
 }
 
 // Get the time corresponding to the first day of the current month
-func StartOfMonth() time.Time {
-	location, err := time.LoadLocation(global.LocationString)
-	if err != nil {
-		fmt.Println(err)
-	}
-	date := time.Now().In(location)
-	return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
+func StartOfMonth(date time.Time) time.Time {
+	return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
 }
 
 // Get which monday of the month a date is(or -1 if it is not a monday)
 func MondayOfMonth(date time.Time) int {
 	if date.Weekday() == time.Monday {
-		return (date.Day()-Monday(StartOfMonth()).Day())/7 + 1
+		return (date.Day()-Monday(StartOfMonth(date)).Day())/7 + 1
 	} else {
 		return -1
 	}
@@ -83,11 +78,12 @@ func Create() error {
 		return err
 	}
 
-	c = cal.NewCalendar()
+	calendars := make(map[*global.Brigade]*cal.Calendar, 0)
 
-	c.WorkdayFunc = isMeetingDay
-
-	cal.AddUsHolidays(c)
+	for _, brigade := range global.Brigades {
+		calendars[&brigade] = cal.NewCalendar()
+		cal.AddUsHolidays(calendars[&brigade])
+	}
 
 	return nil
 }
@@ -181,6 +177,8 @@ func FetchAgenda(brigade *global.Brigade) (string, []string) {
 	date := time.Now().In(location)
 
 	nextMeetingDate := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
+
+	c := calendars[brigade]
 
 	if c.IsWorkday(date) {
 		nextMeetingDate = nextMeetingDate.AddDate(0, 0, date.Day()-1)

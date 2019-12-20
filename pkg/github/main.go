@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"github.com/bradleyfalzon/ghinstallation"
 	"github.com/bwmarrin/discordgo"
-	"github.com/codefordenver/scout/global"
+	"github.com/codefordenver/codefordenver-scout/global"
 	"github.com/google/go-github/github"
 	"github.com/teacat/noire"
 	"io/ioutil"
