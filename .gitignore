@@ -1,5 +1,5 @@
 # ignore secrets
 credentials.json
 token.json
-scout
+codefordenver-scout
 main
