@@ -114,7 +114,7 @@ func handleRepositoryCreate(repo Repository) {
 		fmt.Println("error fetching guild channels,", err)
 	} else {
 		for _, channel := range channels {
-			if channel.ParentID == brigades[repo.Owner.Name].ActiveProjectCategoryID && strings.Contains(strings.ToLower(repo.Name), channel.Name) {
+			if (channel.ParentID == brigades[repo.Owner.Name].ActiveProjectCategoryID || channel.ParentID == brigades[repo.Owner.Name].InactiveProjectCategoryID) && strings.Contains(strings.ToLower(repo.Name), channel.Name) {
 				projectExists = true
 				textChannel = channel
 				if roles, err := discord.GuildRoles(brigades[repo.Owner.Name].GuildID); err != nil {
