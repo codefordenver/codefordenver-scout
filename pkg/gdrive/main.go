@@ -30,19 +30,14 @@ func Monday(date time.Time) time.Time {
 }
 
 // Get the time corresponding to the first day of the current month
-func StartOfMonth() time.Time {
-	location, err := time.LoadLocation(global.LocationString)
-	if err != nil {
-		fmt.Println(err)
-	}
-	date := time.Now().In(location)
-	return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
+func StartOfMonth(date time.Time) time.Time {
+	return time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, date.Location())
 }
 
 // Get which monday of the month a date is(or -1 if it is not a monday)
 func MondayOfMonth(date time.Time) int {
 	if date.Weekday() == time.Monday {
-		return (date.Day()-Monday(StartOfMonth()).Day())/7 + 1
+		return (date.Day()-Monday(StartOfMonth(date)).Day())/7 + 1
 	} else {
 		return -1
 	}
