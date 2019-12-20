@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/codefordenver/scout/global"
+	"github.com/codefordenver/codefordenver-scout/global"
 	"github.com/rickar/cal"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
@@ -78,10 +78,11 @@ func Create() error {
 		return err
 	}
 
+	calendars := make(map[*global.Brigade]*cal.Calendar, 0)
+
 	for _, brigade := range global.Brigades {
 		calendars[&brigade] = cal.NewCalendar()
 		cal.AddUsHolidays(calendars[&brigade])
-
 	}
 
 	return nil
