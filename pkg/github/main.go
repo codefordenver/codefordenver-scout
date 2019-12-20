@@ -114,7 +114,7 @@ func handleRepositoryCreate(repo Repository) {
 		fmt.Println("error fetching guild channels,", err)
 	} else {
 		for _, channel := range channels {
-			if channel.ParentID == brigades[repo.Owner.Name].ActiveProjectCategoryID && strings.Contains(strings.ToLower(repo.Name), channel.Name) {
+			if (channel.ParentID == brigades[repo.Owner.Name].ActiveProjectCategoryID || channel.ParentID == brigades[repo.Owner.Name].InactiveProjectCategoryID) && strings.Contains(strings.ToLower(repo.Name), channel.Name) {
 				projectExists = true
 				textChannel = channel
 				if roles, err := discord.GuildRoles(brigades[repo.Owner.Name].GuildID); err != nil {
@@ -167,11 +167,16 @@ func handleRepositoryCreate(repo Repository) {
 	projectChampionOverwrite := discordgo.PermissionOverwrite{
 		ID:    championRole.ID,
 		Type:  "role",
-		Allow: discordgo.PermissionReadMessages,
+		Allow: discordgo.PermissionReadMessages | discordgo.PermissionManageWebhooks | discordgo.PermissionManageChannels,
 	}
 	projectOverwrite := discordgo.PermissionOverwrite{
 		ID:    projectRole.ID,
 		Type:  "role",
+		Allow: discordgo.PermissionReadMessages,
+	}
+	memberOverwrite := discordgo.PermissionOverwrite {
+		ID: brigades[repo.Owner.Name].MemberRole,
+		Type: "role",
 		Allow: discordgo.PermissionReadMessages,
 	}
 	everyoneOverwrite := discordgo.PermissionOverwrite{
@@ -185,7 +190,7 @@ func handleRepositoryCreate(repo Repository) {
 		ParentID: brigades[repo.Owner.Name].ActiveProjectCategoryID,
 		PermissionOverwrites: []*discordgo.PermissionOverwrite{
 			&projectChampionOverwrite,
-			&projectOverwrite,
+			&memberOverwrite,
 			&everyoneOverwrite,
 		},
 	}
