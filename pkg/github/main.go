@@ -167,11 +167,16 @@ func handleRepositoryCreate(repo Repository) {
 	projectChampionOverwrite := discordgo.PermissionOverwrite{
 		ID:    championRole.ID,
 		Type:  "role",
-		Allow: discordgo.PermissionReadMessages,
+		Allow: discordgo.PermissionReadMessages | discordgo.PermissionManageWebhooks | discordgo.PermissionManageChannels,
 	}
 	projectOverwrite := discordgo.PermissionOverwrite{
 		ID:    projectRole.ID,
 		Type:  "role",
+		Allow: discordgo.PermissionReadMessages,
+	}
+	memberOverwrite := discordgo.PermissionOverwrite {
+		ID: brigades[repo.Owner.Name].MemberRole,
+		Type: "role",
 		Allow: discordgo.PermissionReadMessages,
 	}
 	everyoneOverwrite := discordgo.PermissionOverwrite{
@@ -185,7 +190,7 @@ func handleRepositoryCreate(repo Repository) {
 		ParentID: brigades[repo.Owner.Name].ActiveProjectCategoryID,
 		PermissionOverwrites: []*discordgo.PermissionOverwrite{
 			&projectChampionOverwrite,
-			&projectOverwrite,
+			&memberOverwrite,
 			&everyoneOverwrite,
 		},
 	}
