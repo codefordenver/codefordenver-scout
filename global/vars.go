@@ -22,7 +22,6 @@ type Brigade struct {
 }
 
 var (
-	LocationString string
 	AirtableKey    string
 	Brigades       []Brigade
 )

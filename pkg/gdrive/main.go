@@ -18,7 +18,7 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
-var c *cal.Calendar
+var calendars map[*global.Brigade]*cal.Calendar
 
 func Monday(date time.Time) time.Time {
 	weekdayInt := int(date.Weekday())
@@ -83,11 +83,11 @@ func Create() error {
 		return err
 	}
 
-	c = cal.NewCalendar()
+	for _, brigade := range global.Brigades {
+		calendars[&brigade] = cal.NewCalendar()
+		cal.AddUsHolidays(calendars[&brigade])
 
-	c.WorkdayFunc = isMeetingDay
-
-	cal.AddUsHolidays(c)
+	}
 
 	return nil
 }
@@ -181,6 +181,8 @@ func FetchAgenda(brigade *global.Brigade) (string, []string) {
 	date := time.Now().In(location)
 
 	nextMeetingDate := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
+
+	c := calendars[brigade]
 
 	if c.IsWorkday(date) {
 		nextMeetingDate = nextMeetingDate.AddDate(0, 0, date.Day()-1)

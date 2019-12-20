@@ -22,7 +22,6 @@ type Brigades struct {
 }
 
 func init() {
-	global.LocationString = os.Getenv("SCOUT_LOCATION_STRING")
 	global.AirtableKey = os.Getenv("AIRTABLE_API_KEY")
 }
 
