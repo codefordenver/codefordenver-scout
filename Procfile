@@ -1,1 +1,1 @@
-web: bin/scout
+web: bin/codefordenver-scout
