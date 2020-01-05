@@ -78,11 +78,12 @@ func Create() error {
 		return err
 	}
 
-	calendars := make(map[*global.Brigade]*cal.Calendar, 0)
+	calendars = make(map[*global.Brigade]*cal.Calendar, 0)
 
-	for _, brigade := range global.Brigades {
-		calendars[&brigade] = cal.NewCalendar()
-		cal.AddUsHolidays(calendars[&brigade])
+	for i := range global.Brigades {
+		brigade := &global.Brigades[i]
+		calendars[brigade] = cal.NewCalendar()
+		cal.AddUsHolidays(calendars[brigade])
 	}
 
 	return nil
@@ -170,6 +171,7 @@ func saveToken(path string, token *oauth2.Token) error {
 }
 
 func FetchAgenda(brigade *global.Brigade) (string, []string) {
+
 	location, err := time.LoadLocation(brigade.LocationString)
 	if err != nil {
 		fmt.Println(err)

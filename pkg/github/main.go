@@ -74,8 +74,9 @@ func Create(dg *discordgo.Session) error {
 
 	brigades = make(map[string]*global.Brigade, 0)
 
-	for _, brigade := range global.Brigades {
-		brigades[brigade.GithubOrg] = &brigade
+	for i := range global.Brigades {
+		brigade := &global.Brigades[i]
+		brigades[brigade.GithubOrg] = brigade
 	}
 
 	return nil

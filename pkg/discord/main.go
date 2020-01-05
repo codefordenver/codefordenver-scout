@@ -292,8 +292,9 @@ func Create() (*discordgo.Session, error) {
 
 	brigades = make(map[string]*global.Brigade, 0)
 
-	for _, brigade := range global.Brigades {
-		brigades[brigade.GuildID] = &brigade
+	for i := range global.Brigades {
+		brigade := &global.Brigades[i]
+		brigades[brigade.GuildID] = brigade
 	}
 
 	return dg, nil
