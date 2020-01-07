@@ -222,12 +222,7 @@ func handleRepositoryCreate(repo Repository) {
 			fmt.Println("error creating GitHub webhook,", err)
 		}
 	}
-	if !projectExists {
-		// Send prompt to set champions in Discord text channel
-		if _, err := discord.ChannelMessageSend(textChannel.ID, "@admin, use `!champions "+strings.ToLower(repo.Name)+" [list of project champion mentions]` to set champions for this project"); err != nil {
-			fmt.Println("error sending channel message", err)
-		}
-	}
+
 	//Create Discord github channel
 	githubChannelCreateData := discordgo.GuildChannelCreateData{
 		Name:     repo.Name + "-github",

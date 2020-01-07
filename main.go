@@ -75,7 +75,7 @@ func main() {
 	go func() {
 		err := server.ListenAndServe()
 		if err != nil {
-			log.Fatal("error starting github webhook,", err)
+			log.Fatal("error starting GitHub webhook,", err)
 		}
 	}()
 
