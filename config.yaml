@@ -9,7 +9,7 @@ Brigades:
     MemberRole: ENC[AES256_GCM,data:0QMzHQuUEMbL3jorxlWNiVps,iv:G3Xw1dQKmxTQziXdIvYC6UxLoiK0IMMHdLSrOL1Bi2I=,tag:bccQ6kAs2bxxiXu2ssBv7w==,type:str]
     OnboardingInviteCode: ENC[AES256_GCM,data:z6bInEapvw==,iv:bHycugOJmUC0wUNLFAuqGv+R+jqZxPzkJFaL+p9X6K0=,tag:VPly0ZrFEMceDszqf/AeeQ==,type:str]
     CodeOfConductMessageID: ENC[AES256_GCM,data:K3UDjApDuHTlupow8ci2J+JP,iv:iuqIFVSuCb0itgDvk0feap3owHLKMNgfCgBacPPZRnk=,tag:kkNIDPP0n4yaGqlBjOVisA==,type:str]
-    AgendaFolderID: ENC[AES256_GCM,data:M2uw6toYkWJAMkkp9bF/gFZ/eNlPcwX9S+aZ5Jj5/MTm,iv:tTdB0/bPYXHGR+8aBBStqEKVvy7r3OLid7EYtcfSgxc=,tag:MJEcC4pLYrrA/lwiH17Oug==,type:str]
+    AgendaFolderID: ENC[AES256_GCM,data:hem5UPJu95PJmT4GbbMG0Hdk2y1wnkxBoRlcRy4A6Mqs,iv:0upEJA3kEiH+4YF3GNDIhIFJhdD9l+gpiol3aE03IgU=,tag:llp2FWv6XADgIBELGkrfOg==,type:str]
     LocationString: ENC[AES256_GCM,data:YKzQOTpt0Vk7hoGA97Q=,iv:YPGlGLXDhOWF/uKp/vJ1MmZSvzCTd0qc5TIMRNpT5gA=,tag:7WcMnW77CrIWTX/CXoQgrg==,type:str]
     AirtableBaseID: ENC[AES256_GCM,data:MQO7jYyY/w0hFbFfdYa4HBs=,iv:MdLoh0Suvcxr9Bg767TusA2di+ybbV6XuCulXRDdzyo=,tag:yRDZ+mr82bHzEAp269crEQ==,type:str]
     Files:
@@ -25,8 +25,8 @@ sops:
         aws_profile: ""
     gcp_kms: []
     azure_kv: []
-    lastmodified: '2019-08-23T01:37:53Z'
-    mac: ENC[AES256_GCM,data:ullFntQW9Th80dCybAbJb6Odwdd2LPFN68G7DkIj4B0LrNstu2v5nFsyl+E9OsIC0aP9fPM4tT1HkffS8mjq0hVwkzY20bsQ92W8vHbadkwsIyCm65URrd9DiUc5qRI/wYOMWq/qiIT4jpQPJyd5W3dTaZi7NjAIt0qkLjko6U8=,iv:A3MhSeIjqm5BUOVGwERLgIyi7GJ5MVoy4d/kwX6jrSk=,tag:Oq1SvcuzDU1UPgC+AQQraA==,type:str]
+    lastmodified: '2020-01-07T01:45:13Z'
+    mac: ENC[AES256_GCM,data:811nFDtN57W9tFoy/a4SYWYZMXj6lRMMLSE7p5dIOZUEMyBPNmmyT9mbGS9M+IqYa8OrX28lPVONIhKDk9oS3SMLr3Gt95b/kNEb4EaH9mzRMcFxOR/eZORNVGBD07D/z+o8mj7x3cZOCe0ZTnPpR5YK9pHTl4xAfShPq+uYQQo=,iv:ja8jIbHeYBcopm5rOFnKOdZ8nytRgI2XZvR0xw0905E=,tag:aNZdTa5oV7tn6GT5MX0Kag==,type:str]
     pgp: []
     unencrypted_suffix: _unencrypted
-    version: 3.3.1
+    version: 3.5.0
