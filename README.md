@@ -8,7 +8,6 @@ Commands:
 - `!onboardall` - Converts all users with new or onboarding role to member role
 - `!onboard` - Converts all users with onboarding role to member role
 - `!agenda` - Fetches the agenda for the next meeting, or creates and returns it if it does not exist
-- `!list-projects` - Messages the user a list of available projects
 - `!join [project name]` - Adds user to the project
 - `!leave [project name]` - Removes user from the project
 - `!maintain [project name]` - Moves a project to maintenance
@@ -29,10 +28,14 @@ Set environment variables:
 AWS_ACCESS_KEY_ID=AWS key ID for sops
 AWS_SECRET_ACCESS_KEY=AWS key secret for sops
 SCOUT_TOKEN=discord bot token
-AIRTABLE_API_KEY=Airtable account key
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
+SCOUT_DB_URL=host for database
+SCOUT_DB_PORT=port for database
+SCOUT_DB_USER=user for database
+SCOUT_DB_NAME=name of database
+SCOUT_DB_PASSWORD=password for database
 ```
 Get these values from a current project member
 

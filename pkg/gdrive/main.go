@@ -5,7 +5,8 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/codefordenver/codefordenver-scout/global"
+	"github.com/codefordenver/codefordenver-scout/models"
+	"github.com/jinzhu/gorm"
 	"github.com/rickar/cal"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
@@ -18,7 +19,7 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
-var calendars map[*global.Brigade]*cal.Calendar
+var calendars map[int]*cal.Calendar
 
 func Monday(date time.Time) time.Time {
 	weekdayInt := int(date.Weekday())
@@ -50,9 +51,12 @@ func isMeetingDay(date time.Time) bool {
 }
 
 var client *drive.Service
+var db *gorm.DB
 
 // Create a drive API client and calendar object for meeting tracking
-func Create() error {
+func New(dbConnection *gorm.DB) error {
+	db = dbConnection
+
 	credsEnv := os.Getenv("GDRIVE_CREDS")
 	creds, err := base64.StdEncoding.DecodeString(credsEnv)
 	if err != nil {
@@ -78,12 +82,20 @@ func Create() error {
 		return err
 	}
 
-	calendars = make(map[*global.Brigade]*cal.Calendar, 0)
+	calendars = make(map[int]*cal.Calendar, 0)
 
-	for i := range global.Brigades {
-		brigade := &global.Brigades[i]
-		calendars[brigade] = cal.NewCalendar()
-		cal.AddUsHolidays(calendars[brigade])
+	var brigades []models.Brigade
+	if err = db.Find(&brigades).Error; err != nil {
+		fmt.Println("error fetching all brigades,", err)
+		return err
+	}
+
+	for _, brigade := range brigades {
+		calendars[brigade.ID] = &cal.Calendar {
+			WorkdayFunc: isMeetingDay,
+			Observed: cal.ObservedExact,
+		}
+		cal.AddUsHolidays(calendars[brigade.ID])
 	}
 
 	return nil
@@ -170,9 +182,17 @@ func saveToken(path string, token *oauth2.Token) error {
 	return nil
 }
 
-func FetchAgenda(brigade *global.Brigade) (string, []string) {
+func FetchAgenda(brigadeID int) (string, []string) {
 
-	location, err := time.LoadLocation(brigade.LocationString)
+	/* brigade := select brigades matching brigadeID*/
+	var brigade models.Brigade
+	err := db.First(&brigade, brigadeID).Error
+	if err != nil {
+		fmt.Println("error fetching brigade,", err)
+		return "", []string{"Failed to get brigade for onboarding. Try again later."}
+	}
+
+	location, err := time.LoadLocation(brigade.TimezoneString)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -180,7 +200,7 @@ func FetchAgenda(brigade *global.Brigade) (string, []string) {
 
 	nextMeetingDate := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
 
-	c := calendars[brigade]
+	c := calendars[brigadeID]
 
 	if c.IsWorkday(date) {
 		nextMeetingDate = nextMeetingDate.AddDate(0, 0, date.Day()-1)
