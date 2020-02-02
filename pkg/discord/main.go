@@ -80,7 +80,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 	}
 	cmdData := shared.CommandData{
 		Session:     s,
-		Brigade: brigade,
+		Brigade:     brigade,
 		MessageData: msgData,
 		Args:        args,
 	}
@@ -424,7 +424,7 @@ func onboardGroup(data shared.CommandData, r ...string) []shared.FunctionRespons
 	guild, err := data.Session.Guild(guildID)
 	if err != nil {
 		fmt.Println("error fetching guild,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "Failed to get Discord server for onboarding. Try again later.",
@@ -438,11 +438,11 @@ func onboardGroup(data shared.CommandData, r ...string) []shared.FunctionRespons
 			if contains(member.Roles, role) {
 				if err = data.Session.GuildMemberRoleRemove(guildID, member.User.ID, role); err != nil {
 					fmt.Println("error removing guild role,", err)
-					errors += "\nFailed to remove **"+role+"** role from "+orEmpty(member.Nick, member.User.Username)+". Have an administrator to remove it manually."
+					errors += "\nFailed to remove **" + role + "** role from " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to remove it manually."
 				}
 				if err = data.Session.GuildMemberRoleAdd(guildID, member.User.ID, data.Brigade.MemberRole); err != nil {
 					fmt.Println("error adding guild role,", err)
-					errors += "\nFailed to add **"+role+"** role to "+orEmpty(member.Nick, member.User.Username)+". Have an administrator to add it manually."
+					errors += "\nFailed to add **" + role + "** role to " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to add it manually."
 				}
 				onboardedUsers = append(onboardedUsers, member.User)
 				break
@@ -473,7 +473,7 @@ func onboardGroup(data shared.CommandData, r ...string) []shared.FunctionRespons
 	} else {
 		confirmMessageContent = "No users to onboard"
 	}
-	return []shared.FunctionResponse {
+	return []shared.FunctionResponse{
 		{
 			ChannelID: data.ChannelID,
 			Success:   confirmMessageContent,
@@ -484,7 +484,7 @@ func onboardGroup(data shared.CommandData, r ...string) []shared.FunctionRespons
 
 // Return a link to the agenda for the next meeting
 func getAgenda(data shared.CommandData) []shared.FunctionResponse {
-	return []shared.FunctionResponse {
+	return []shared.FunctionResponse{
 		gdrive.FetchAgenda(data),
 	}
 }
@@ -494,7 +494,7 @@ func joinProject(data shared.CommandData) []shared.FunctionResponse {
 	projectName := data.Args[0]
 	if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
 		fmt.Println("error fetching guild roles,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "Failed to get Discord roles to add you to project. Try again later.",
@@ -505,7 +505,7 @@ func joinProject(data shared.CommandData) []shared.FunctionResponse {
 			if strings.ToLower(role.Name) == strings.ToLower(projectName) {
 				if err := data.Session.GuildMemberRoleAdd(data.GuildID, data.Author.ID, role.ID); err != nil {
 					fmt.Println("error adding guild role,", err)
-					return []shared.FunctionResponse {
+					return []shared.FunctionResponse{
 						{
 							ChannelID: data.ChannelID,
 							Error:     "Failed to add **" + role.Name + "** role to " + data.Author.Username + ". Have an administrator add it manually.",
@@ -515,7 +515,7 @@ func joinProject(data shared.CommandData) []shared.FunctionResponse {
 			}
 		}
 		github.AddUserToTeamWaitlist(data.Author.ID, data.Brigade.GithubOrganization, projectName)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.Author.ID,
 				Success:   "Trying to add you to the github team for " + projectName + ". Please respond with `!github your-github-username` to be added.",
@@ -529,7 +529,7 @@ func leaveProject(data shared.CommandData) []shared.FunctionResponse {
 	projectName := data.Args[0]
 	if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
 		fmt.Println("error fetching guild roles,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "Failed to get Discord roles to remove project role.",
@@ -540,7 +540,7 @@ func leaveProject(data shared.CommandData) []shared.FunctionResponse {
 			if strings.HasPrefix(strings.ToLower(role.Name), strings.ToLower(projectName)) {
 				if err := data.Session.GuildMemberRoleRemove(data.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
 					fmt.Println("error removing guild role,", err)
-					return []shared.FunctionResponse {
+					return []shared.FunctionResponse{
 						{
 							ChannelID: data.ChannelID,
 							Error:     "Failed to remove **" + role.Name + "** role from " + data.Author.Username + ". Have an administrator to remove it manually.",
@@ -550,7 +550,7 @@ func leaveProject(data shared.CommandData) []shared.FunctionResponse {
 			}
 		}
 	}
-	return []shared.FunctionResponse {
+	return []shared.FunctionResponse{
 		{
 			ChannelID: data.ChannelID,
 			Success:   "You were successfully removed from " + projectName + ".",
@@ -568,9 +568,9 @@ func setChampions(data shared.CommandData) []shared.FunctionResponse {
 		userID := strings.TrimSuffix(strings.TrimPrefix(user, "<@"), ">")
 		discordUser, err := data.Session.User(userID)
 		if err != nil {
-			responses = append(responses, shared.FunctionResponse {
-					ChannelID: data.ChannelID,
-					Error:     "Failed to find user " + user,
+			responses = append(responses, shared.FunctionResponse{
+				ChannelID: data.ChannelID,
+				Error:     "Failed to find user " + user,
 			})
 		} else {
 			if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
@@ -601,7 +601,7 @@ func setChampions(data shared.CommandData) []shared.FunctionResponse {
 // Send github username to add user to team or set as admin
 func sendGithubUsername(data shared.CommandData) []shared.FunctionResponse {
 	githubName := data.Args[0]
-	return []shared.FunctionResponse {
+	return []shared.FunctionResponse{
 		github.DispatchUsername(data.MessageData, githubName),
 	}
 }
@@ -612,14 +612,14 @@ func trackFile(data shared.CommandData) []shared.FunctionResponse {
 	link := data.Args[1]
 	file, err := fetchFile(data)
 	if file != nil {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "A file with the name **" + fileName + "** is already tracked: " + file.URL,
 			},
 		}
 	} else if err != nil {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "Failed to check if a file with the name **" + fileName + "** is already tracked.",
@@ -627,21 +627,21 @@ func trackFile(data shared.CommandData) []shared.FunctionResponse {
 		}
 	}
 	/* New file = &File{...}*/
-	file = &models.File {
+	file = &models.File{
 		BrigadeID: data.Brigade.ID,
-		Name: fileName,
-		URL: link,
+		Name:      fileName,
+		URL:       link,
 	}
 	if err := db.Create(file).Error; err != nil {
 		fmt.Println("error storing file record,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "Failed to track new file. Try again later.",
 			},
 		}
 	} else {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Success:   "File successfully tracked. Use `!fetch " + fileName + "` to retrieve it, or `!untrack " + fileName + "` to untrack it.",
@@ -654,14 +654,14 @@ func untrackFile(data shared.CommandData) []shared.FunctionResponse {
 	fileName := strings.ToLower(data.Args[0])
 	file, err := fetchFile(data)
 	if file == nil {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "No file with the name **" + fileName + "** is tracked.",
 			},
 		}
 	} else if err != nil {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "Failed to check if a file with the name **" + fileName + "** is already tracked.",
@@ -670,14 +670,14 @@ func untrackFile(data shared.CommandData) []shared.FunctionResponse {
 	}
 	/* Delete from Files where FileName matches file.Name and brigade ID matches brigade with data.GuildID */
 	if err = db.Delete(&file).Error; err != nil {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "Failed to untrack **" + fileName + "**. Try again later.",
 			},
 		}
 	} else {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Success:   "Successfully untracked **" + fileName + "**.",
@@ -693,21 +693,21 @@ func fetchFileDispatch(data shared.CommandData) []shared.FunctionResponse {
 	if file != nil {
 		msg = file.URL
 	} else if err != nil {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "Failed to fetch file **" + data.Args[0] + "**. Try again later.",
 			},
 		}
 	} else {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
 				Error:     "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it",
 			},
 		}
 	}
-	return []shared.FunctionResponse {
+	return []shared.FunctionResponse{
 		{
 			ChannelID: data.ChannelID,
 			Success:   msg,
@@ -739,10 +739,10 @@ func maintainProject(data shared.CommandData) []shared.FunctionResponse {
 	guild, err := data.Session.Guild(data.GuildID)
 	if err != nil {
 		fmt.Println("error fetching guild,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error: "Failed to fetch Discord server for project.",
+				Error:     "Failed to fetch Discord server for project.",
 			},
 		}
 	}
@@ -759,19 +759,19 @@ func maintainProject(data shared.CommandData) []shared.FunctionResponse {
 	}
 	if githubChannel == nil || channel == nil {
 		fmt.Println("error fetching guild channels,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error: "Failed to fetch Discord channels for project.",
+				Error:     "Failed to fetch Discord channels for project.",
 			},
 		}
 	}
 	if _, err = data.Session.ChannelDelete(githubChannel.ID); err != nil {
 		fmt.Println("error deleting guild channel,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error: "Failed to delete GitHub channel for **"+projectName+"**. Have an administrator do this manually.",
+				Error:     "Failed to delete GitHub channel for **" + projectName + "**. Have an administrator do this manually.",
 			},
 		}
 	}
@@ -780,17 +780,17 @@ func maintainProject(data shared.CommandData) []shared.FunctionResponse {
 	}
 	if _, err = data.Session.ChannelEditComplex(channel.ID, &editData); err != nil {
 		fmt.Println("error editing guild channel,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error: "Failed to move discussion channel for **"+projectName+"**. Have an administrator do this manually.",
+				Error:     "Failed to move discussion channel for **" + projectName + "**. Have an administrator do this manually.",
 			},
 		}
 	}
-	return []shared.FunctionResponse {
+	return []shared.FunctionResponse{
 		{
 			ChannelID: data.ChannelID,
-			Success: "Successfully moved  **"+projectName+"** to maintenance.",
+			Success:   "Successfully moved  **" + projectName + "** to maintenance.",
 		},
 	}
 }

@@ -92,9 +92,9 @@ func New(dbConnection *gorm.DB) error {
 	}
 
 	for _, brigade := range brigades {
-		calendars[brigade.ID] = &cal.Calendar {
+		calendars[brigade.ID] = &cal.Calendar{
 			WorkdayFunc: isMeetingDay,
-			Observed: cal.ObservedExact,
+			Observed:    cal.ObservedExact,
 		}
 		cal.AddUsHolidays(calendars[brigade.ID])
 	}
@@ -207,9 +207,9 @@ func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 		Fields("files(name, webViewLink)").Do()
 	if err != nil {
 		fmt.Println("error fetching files,", err)
-		return shared.FunctionResponse {
+		return shared.FunctionResponse{
 			ChannelID: data.ChannelID,
-			Error: "Error fetching files from Google Drive.",
+			Error:     "Error fetching files from Google Drive.",
 		}
 	}
 	var agenda *drive.File
@@ -217,25 +217,25 @@ func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 		r, err = client.Files.List().Q(fmt.Sprintf("'%s' in parents", data.Brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
 		if err != nil {
 			fmt.Println("error fetching files,", err)
-			return shared.FunctionResponse {
+			return shared.FunctionResponse{
 				ChannelID: data.ChannelID,
-				Error: "Error fetching files from Google Drive.",
+				Error:     "Error fetching files from Google Drive.",
 			}
 		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
 		agenda, err = client.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
 			fmt.Println("error copying file,", err)
-			return shared.FunctionResponse {
+			return shared.FunctionResponse{
 				ChannelID: data.ChannelID,
-				Error: "Error creating new agenda.",
+				Error:     "Error creating new agenda.",
 			}
 		}
 	} else {
 		agenda = r.Files[0]
 	}
-	return shared.FunctionResponse {
+	return shared.FunctionResponse{
 		ChannelID: data.ChannelID,
-		Success: fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink),
+		Success:   fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink),
 	}
 }

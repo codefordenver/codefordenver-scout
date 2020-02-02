@@ -179,9 +179,9 @@ func handleRepositoryCreate(repo Repository) {
 		Type:  "role",
 		Allow: discordgo.PermissionReadMessages,
 	}
-	memberOverwrite := discordgo.PermissionOverwrite {
-		ID: brigade.MemberRole,
-		Type: "role",
+	memberOverwrite := discordgo.PermissionOverwrite{
+		ID:    brigade.MemberRole,
+		Type:  "role",
 		Allow: discordgo.PermissionReadMessages,
 	}
 	everyoneOverwrite := discordgo.PermissionOverwrite{
@@ -381,13 +381,12 @@ func DispatchUsername(data shared.MessageData, githubName string) shared.Functio
 		}
 	}
 	if !validChampion && !validTeamMember {
-		return shared.FunctionResponse {
+		return shared.FunctionResponse{
 			ChannelID: data.Author.ID,
-			Error: "Was not expecting a GitHub username from you. Have you either `!join`ed a project or been requested to be a project champion?",
-
+			Error:     "Was not expecting a GitHub username from you. Have you either `!join`ed a project or been requested to be a project champion?",
 		}
 	}
-	return shared.FunctionResponse {
+	return shared.FunctionResponse{
 		ChannelID: data.Author.ID,
 		Success:   successMessage,
 		Error:     errorMessage,
@@ -409,16 +408,15 @@ func setProjectChampion(discordUser, githubName string) shared.FunctionResponse 
 	}
 	championSetData := championWaitlist[discordUser]
 	if _, err := client.Repositories.AddCollaborator(context.Background(), championSetData.Owner, championSetData.Project, githubName, &opt); err != nil {
-		return shared.FunctionResponse {
+		return shared.FunctionResponse{
 			ChannelID: discordUser,
-			Error: "Failed to give you administrator access to " + championSetData.Project + ". Please contact a brigade captain to manually add you.",
+			Error:     "Failed to give you administrator access to " + championSetData.Project + ". Please contact a brigade captain to manually add you.",
 		}
 	} else {
 		delete(championWaitlist, discordUser)
-		return shared.FunctionResponse {
+		return shared.FunctionResponse{
 			ChannelID: discordUser,
-			Success: "You've been added as a champion of " + championSetData.Project,
-
+			Success:   "You've been added as a champion of " + championSetData.Project,
 		}
 	}
 }
@@ -451,23 +449,23 @@ func addUserToTeam(channelID, discordUser, githubName string) shared.FunctionRes
 					opts := github.TeamAddTeamMembershipOptions{Role: "member"}
 					if _, _, err = client.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
 						fmt.Println("error adding user to GitHub team,", err)
-						return shared.FunctionResponse {
+						return shared.FunctionResponse{
 							ChannelID: channelID,
-							Error: "Failed to add you to the GitHub team **" + teamAddData.Team + "**. Try again later.",
+							Error:     "Failed to add you to the GitHub team **" + teamAddData.Team + "**. Try again later.",
 						}
 					}
 					delete(teamWaitlist, discordUser)
-					return shared.FunctionResponse {
+					return shared.FunctionResponse{
 						ChannelID: channelID,
-						Success: "You've been added to **" + teamAddData.Team + "**",
+						Success:   "You've been added to **" + teamAddData.Team + "**",
 					}
 				}
 			}
 		}
 	}
-	return shared.FunctionResponse {
+	return shared.FunctionResponse{
 		ChannelID: channelID,
-		Error: "Failed to find the GitHub team for **" + teamAddData.Team + "**. Try again later.",
+		Error:     "Failed to find the GitHub team for **" + teamAddData.Team + "**. Try again later.",
 	}
 }
 
@@ -478,14 +476,14 @@ func CreateIssue(text string, brigade models.Brigade, channel discordgo.Channel)
 	}
 	if issue, _, err := client.Issues.Create(context.Background(), brigade.GithubOrganization, channel.Name, &issue); err != nil {
 		fmt.Println("error creating GitHub issue,", err)
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: channel.ID,
 				Error:     "Failed to create GitHub issue on " + channel.Name,
 			},
 		}
 	} else {
-		return []shared.FunctionResponse {
+		return []shared.FunctionResponse{
 			{
 				ChannelID: channel.ID,
 				Success:   "Issue created: " + *issue.URL,
