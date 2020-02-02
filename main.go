@@ -22,7 +22,9 @@ func main() {
 	if err != nil {
 		return
 	}
+
 	migrations.Migrate(db)
+
 	err = gdrive.New(db)
 	if err != nil {
 		return

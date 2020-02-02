@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/codefordenver/codefordenver-scout/models"
+	"github.com/codefordenver/codefordenver-scout/pkg/discord"
+	"github.com/codefordenver/codefordenver-scout/pkg/shared"
 	"github.com/jinzhu/gorm"
 	"github.com/rickar/cal"
 	"golang.org/x/oauth2/google"
@@ -182,17 +184,8 @@ func saveToken(path string, token *oauth2.Token) error {
 	return nil
 }
 
-func FetchAgenda(brigadeID int) (string, []string) {
-
-	/* brigade := select brigades matching brigadeID*/
-	var brigade models.Brigade
-	err := db.First(&brigade, brigadeID).Error
-	if err != nil {
-		fmt.Println("error fetching brigade,", err)
-		return "", []string{"Failed to get brigade for onboarding. Try again later."}
-	}
-
-	location, err := time.LoadLocation(brigade.TimezoneString)
+func FetchAgenda(data discord.CommandData) shared.FunctionResponse {
+	location, err := time.LoadLocation(data.Brigade.TimezoneString)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -200,7 +193,7 @@ func FetchAgenda(brigadeID int) (string, []string) {
 
 	nextMeetingDate := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
 
-	c := calendars[brigadeID]
+	c := calendars[data.Brigade.ID]
 
 	if c.IsWorkday(date) {
 		nextMeetingDate = nextMeetingDate.AddDate(0, 0, date.Day()-1)
@@ -215,23 +208,39 @@ func FetchAgenda(brigadeID int) (string, []string) {
 		Fields("files(name, webViewLink)").Do()
 	if err != nil {
 		fmt.Println("error fetching files,", err)
-		return "", []string{"Error fetching files from Google Drive"}
+		return shared.FunctionResponse {
+			ChannelID: data.ChannelID,
+			Success: nil,
+			Error: "Error fetching files from Google Drive.",
+		}
 	}
 	var agenda *drive.File
 	if len(r.Files) == 0 {
-		r, err = client.Files.List().Q(fmt.Sprintf("'%s' in parents", brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
+		r, err = client.Files.List().Q(fmt.Sprintf("'%s' in parents", data.Brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
 		if err != nil {
 			fmt.Println("error fetching files,", err)
-			return "", []string{"Error fetching files from Google Drive"}
+			return shared.FunctionResponse {
+				ChannelID: data.ChannelID,
+				Success: nil,
+				Error: "Error fetching files from Google Drive.",
+			}
 		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
 		agenda, err = client.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
 			fmt.Println("error copying file,", err)
-			return "", []string{"Error creating new agenda"}
+			return shared.FunctionResponse {
+				ChannelID: data.ChannelID,
+				Success: nil,
+				Error: "Error creating new agenda.",
+			}
 		}
 	} else {
 		agenda = r.Files[0]
 	}
-	return fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink), nil
+	return shared.FunctionResponse {
+		ChannelID: data.ChannelID,
+		Success: fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink),
+		Error: nil,
+	}
 }
