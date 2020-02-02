@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/codefordenver/codefordenver-scout/models"
-	"github.com/codefordenver/codefordenver-scout/pkg/discord"
 	"github.com/codefordenver/codefordenver-scout/pkg/shared"
 	"github.com/jinzhu/gorm"
 	"github.com/rickar/cal"
@@ -184,7 +183,7 @@ func saveToken(path string, token *oauth2.Token) error {
 	return nil
 }
 
-func FetchAgenda(data discord.CommandData) shared.FunctionResponse {
+func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 	location, err := time.LoadLocation(data.Brigade.TimezoneString)
 	if err != nil {
 		fmt.Println(err)
@@ -210,7 +209,6 @@ func FetchAgenda(data discord.CommandData) shared.FunctionResponse {
 		fmt.Println("error fetching files,", err)
 		return shared.FunctionResponse {
 			ChannelID: data.ChannelID,
-			Success: nil,
 			Error: "Error fetching files from Google Drive.",
 		}
 	}
@@ -221,7 +219,6 @@ func FetchAgenda(data discord.CommandData) shared.FunctionResponse {
 			fmt.Println("error fetching files,", err)
 			return shared.FunctionResponse {
 				ChannelID: data.ChannelID,
-				Success: nil,
 				Error: "Error fetching files from Google Drive.",
 			}
 		}
@@ -231,7 +228,6 @@ func FetchAgenda(data discord.CommandData) shared.FunctionResponse {
 			fmt.Println("error copying file,", err)
 			return shared.FunctionResponse {
 				ChannelID: data.ChannelID,
-				Success: nil,
 				Error: "Error creating new agenda.",
 			}
 		}
@@ -241,6 +237,5 @@ func FetchAgenda(data discord.CommandData) shared.FunctionResponse {
 	return shared.FunctionResponse {
 		ChannelID: data.ChannelID,
 		Success: fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink),
-		Error: nil,
 	}
 }

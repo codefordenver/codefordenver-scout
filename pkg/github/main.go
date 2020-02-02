@@ -8,7 +8,6 @@ import (
 	"github.com/bradleyfalzon/ghinstallation"
 	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/codefordenver-scout/models"
-	"github.com/codefordenver/codefordenver-scout/pkg/discord"
 	"github.com/codefordenver/codefordenver-scout/pkg/shared"
 	"github.com/google/go-github/github"
 	"github.com/jinzhu/gorm"
@@ -359,7 +358,7 @@ func handleRepositoryDelete(repo Repository) {
 }
 
 // Dispatch a username to the appropriate waitlist
-func DispatchUsername(data discord.MessageData, githubName string) shared.FunctionResponse {
+func DispatchUsername(data shared.MessageData, githubName string) shared.FunctionResponse {
 	var validChampion, validTeamMember bool
 	var errorMessage string
 	var successMessage string
@@ -373,7 +372,7 @@ func DispatchUsername(data discord.MessageData, githubName string) shared.Functi
 		}
 	}
 	if _, validTeamMember = teamWaitlist[data.Author.ID]; validTeamMember {
-		res := addUserToTeam(data.Author.ID, githubName)
+		res := addUserToTeam(data.ChannelID, data.Author.ID, githubName)
 		if res.Success != "" {
 			successMessage += res.Success + "\n"
 		}
@@ -385,7 +384,7 @@ func DispatchUsername(data discord.MessageData, githubName string) shared.Functi
 		return shared.FunctionResponse {
 			ChannelID: data.Author.ID,
 			Error: "Was not expecting a GitHub username from you. Have you either `!join`ed a project or been requested to be a project champion?",
-			Success: nil,
+
 		}
 	}
 	return shared.FunctionResponse {
@@ -411,16 +410,15 @@ func setProjectChampion(discordUser, githubName string) shared.FunctionResponse 
 	championSetData := championWaitlist[discordUser]
 	if _, err := client.Repositories.AddCollaborator(context.Background(), championSetData.Owner, championSetData.Project, githubName, &opt); err != nil {
 		return shared.FunctionResponse {
-			ChannelID: nil,
-			Success: nil,
+			ChannelID: discordUser,
 			Error: "Failed to give you administrator access to " + championSetData.Project + ". Please contact a brigade captain to manually add you.",
 		}
 	} else {
 		delete(championWaitlist, discordUser)
 		return shared.FunctionResponse {
-			ChannelID: nil,
+			ChannelID: discordUser,
 			Success: "You've been added as a champion of " + championSetData.Project,
-			Error: nil,
+
 		}
 	}
 }
@@ -434,7 +432,7 @@ func AddUserToTeamWaitlist(discordUser, owner, team string) {
 }
 
 // Actually adds user to team(and therefore GitHub org)
-func addUserToTeam(discordUser, githubName string) shared.FunctionResponse {
+func addUserToTeam(channelID, discordUser, githubName string) shared.FunctionResponse {
 	teamAddData := teamWaitlist[discordUser]
 	nextPage := 0
 	for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
@@ -454,24 +452,21 @@ func addUserToTeam(discordUser, githubName string) shared.FunctionResponse {
 					if _, _, err = client.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
 						fmt.Println("error adding user to GitHub team,", err)
 						return shared.FunctionResponse {
-							ChannelID: nil,
-							Success: nil,
+							ChannelID: channelID,
 							Error: "Failed to add you to the GitHub team **" + teamAddData.Team + "**. Try again later.",
 						}
 					}
 					delete(teamWaitlist, discordUser)
 					return shared.FunctionResponse {
-						ChannelID: nil,
+						ChannelID: channelID,
 						Success: "You've been added to **" + teamAddData.Team + "**",
-						Error: nil,
 					}
 				}
 			}
 		}
 	}
 	return shared.FunctionResponse {
-		ChannelID: nil,
-		Success: nil,
+		ChannelID: channelID,
 		Error: "Failed to find the GitHub team for **" + teamAddData.Team + "**. Try again later.",
 	}
 }
@@ -486,7 +481,6 @@ func CreateIssue(text string, brigade models.Brigade, channel discordgo.Channel)
 		return []shared.FunctionResponse {
 			{
 				ChannelID: channel.ID,
-				Success:   nil,
 				Error:     "Failed to create GitHub issue on " + channel.Name,
 			},
 		}
@@ -495,7 +489,6 @@ func CreateIssue(text string, brigade models.Brigade, channel discordgo.Channel)
 			{
 				ChannelID: channel.ID,
 				Success:   "Issue created: " + *issue.URL,
-				Error:     nil,
 			},
 		}
 	}
