@@ -383,7 +383,7 @@ func DispatchUsername(data shared.MessageData, githubName string) shared.Functio
 	if !validChampion && !validTeamMember {
 		return shared.FunctionResponse{
 			ChannelID: data.Author.ID,
-			Error:     "Was not expecting a GitHub username from you. Have you either `!join`ed a project or been requested to be a project champion?",
+			Error:     "Was not expecting a GitHub username from you. Have you either `!join`'ed a project or been requested to be a project champion?",
 		}
 	}
 	return shared.FunctionResponse{
@@ -449,13 +449,13 @@ func addUserToTeam(channelID, discordUser, githubName string) shared.FunctionRes
 					opts := github.TeamAddTeamMembershipOptions{Role: "member"}
 					if _, _, err = client.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
 						fmt.Println("error adding user to GitHub team,", err)
-						return shared.FunctionResponse{
+						return shared.FunctionResponse {
 							ChannelID: channelID,
 							Error:     "Failed to add you to the GitHub team **" + teamAddData.Team + "**. Try again later.",
 						}
 					}
 					delete(teamWaitlist, discordUser)
-					return shared.FunctionResponse{
+					return shared.FunctionResponse {
 						ChannelID: channelID,
 						Success:   "You've been added to **" + teamAddData.Team + "**",
 					}
@@ -463,7 +463,7 @@ func addUserToTeam(channelID, discordUser, githubName string) shared.FunctionRes
 			}
 		}
 	}
-	return shared.FunctionResponse{
+	return shared.FunctionResponse {
 		ChannelID: channelID,
 		Error:     "Failed to find the GitHub team for **" + teamAddData.Team + "**. Try again later.",
 	}
@@ -471,19 +471,19 @@ func addUserToTeam(channelID, discordUser, githubName string) shared.FunctionRes
 
 // Creates an issue
 func CreateIssue(text string, brigade models.Brigade, channel discordgo.Channel) []shared.FunctionResponse {
-	issue := github.IssueRequest{
+	issue := github.IssueRequest {
 		Title: &text,
 	}
 	if issue, _, err := client.Issues.Create(context.Background(), brigade.GithubOrganization, channel.Name, &issue); err != nil {
 		fmt.Println("error creating GitHub issue,", err)
-		return []shared.FunctionResponse{
+		return []shared.FunctionResponse {
 			{
 				ChannelID: channel.ID,
-				Error:     "Failed to create GitHub issue on " + channel.Name,
+				Error:     "Failed to create GitHub issue on " + channel.Name + ". Try again later.",
 			},
 		}
 	} else {
-		return []shared.FunctionResponse{
+		return []shared.FunctionResponse {
 			{
 				ChannelID: channel.ID,
 				Success:   "Issue created: " + *issue.URL,

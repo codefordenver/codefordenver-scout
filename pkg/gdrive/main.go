@@ -209,7 +209,7 @@ func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 		fmt.Println("error fetching files,", err)
 		return shared.FunctionResponse{
 			ChannelID: data.ChannelID,
-			Error:     "Error fetching files from Google Drive.",
+			Error:     "Failed to fetch files from Google Drive. Try again later.",
 		}
 	}
 	var agenda *drive.File
@@ -219,7 +219,7 @@ func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 			fmt.Println("error fetching files,", err)
 			return shared.FunctionResponse{
 				ChannelID: data.ChannelID,
-				Error:     "Error fetching files from Google Drive.",
+				Error:     "Failed to fetch files from Google Drive. Try again later.",
 			}
 		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
@@ -228,7 +228,7 @@ func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 			fmt.Println("error copying file,", err)
 			return shared.FunctionResponse{
 				ChannelID: data.ChannelID,
-				Error:     "Error creating new agenda.",
+				Error:     "Failed to create new agenda. Try again later.",
 			}
 		}
 	} else {

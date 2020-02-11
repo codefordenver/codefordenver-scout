@@ -532,7 +532,7 @@ func leaveProject(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to get Discord roles to remove project role.",
+				Error:     "Failed to get Discord roles to remove project role. Try again later.",
 			},
 		}
 	} else {
@@ -570,14 +570,14 @@ func setChampions(data shared.CommandData) []shared.FunctionResponse {
 		if err != nil {
 			responses = append(responses, shared.FunctionResponse{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to find user " + user,
+				Error:     "Failed to find user " + user + ". Try again later.",
 			})
 		} else {
 			if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
 				fmt.Println("error fetching guild roles,", err)
 				responses = append(responses, shared.FunctionResponse{
 					ChannelID: data.ChannelID,
-					Error:     "Failed to get Discord roles to add champion role.",
+					Error:     "Failed to get Discord roles to add champion role. Try again later.",
 				})
 			} else {
 				for _, role := range roles {
@@ -615,14 +615,14 @@ func trackFile(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error:     "A file with the name **" + fileName + "** is already tracked: " + file.URL,
+				Success:     "A file with the name **" + fileName + "** is already tracked: " + file.URL,
 			},
 		}
 	} else if err != nil {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to check if a file with the name **" + fileName + "** is already tracked.",
+				Error:     "Failed to check if a file with the name **" + fileName + "** is already tracked. Try again later.",
 			},
 		}
 	}
@@ -657,14 +657,14 @@ func untrackFile(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error:     "No file with the name **" + fileName + "** is tracked.",
+				Success:     "No file with the name **" + fileName + "** is tracked.",
 			},
 		}
 	} else if err != nil {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to check if a file with the name **" + fileName + "** is already tracked.",
+				Error:     "Failed to check if a file with the name **" + fileName + "** is already tracked. Try again later.",
 			},
 		}
 	}
@@ -703,7 +703,7 @@ func fetchFileDispatch(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error:     "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it",
+				Success:     "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it",
 			},
 		}
 	}
@@ -742,7 +742,7 @@ func maintainProject(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to fetch Discord server for project.",
+				Error:     "Failed to fetch Discord server for project. Try again later.",
 			},
 		}
 	}
@@ -762,7 +762,7 @@ func maintainProject(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to fetch Discord channels for project.",
+				Error:     "Failed to fetch Discord channels for project. Try again later.",
 			},
 		}
 	}
