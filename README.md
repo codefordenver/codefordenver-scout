@@ -39,26 +39,7 @@ SCOUT_DB_PASSWORD=password for database
 ```
 Get these values from a current project member
 
-Example config.yaml:
-```yaml
-Brigades:
--   GuildID: "5356701682701XXXXX"
-    ActiveProjectCategoryID: "5356777664573XXXXX"
-    EveryoneRole: "5356701682701XXXXX" #Yes, this is the same as the GuildID, they are separated for clarity
-    NewRole: "5738722616191XXXXX"
-    OnboardingRole: "5783212265866XXXXX"
-    MemberRole: "5726261632482XXXXX"
-    OnboardingInviteCode: "XXXXXX"
-    CodeOfConductMessageID: "5802051351128XXXXX"
-    AgendaFolderID: "1NL1M9G0iJVwNDa7kRL1rqypUnafXXXXX"
-    LocationString: "America/Denver"
-    AirtableBaseID: "appXXXXXXXXXXXXXX"
-    GithubOrg: "codefordenver"
-    IssueEmoji: "➡"
-
-The configuration file should be encrypted via sops. Contact a Code for Denver member to have your configuration info added & encrypted. 
-
-```
+View `models/` for the database schema.
 
 To run the bot, simply navigate to the project directory and run:
 ```
