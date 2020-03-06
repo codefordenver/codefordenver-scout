@@ -21,8 +21,8 @@ Note: Commands can also be triggered by `@Scout [command]`
 ### Setup
 Install:
 - [Golang](https://golang.org/)
-- [go-watcher](https://github.com/canthefason/go-watcher)
 - [sops](https://github.com/mozilla/sops)
+- [air](https://github.com/cosmtrek/air)
 
 Set environment variables:
 ```
@@ -59,5 +59,5 @@ The configuration file should be encrypted via sops. Contact a Code for Denver m
 
 To run the bot, simply navigate to the project directory and run:
 ```
-watcher
+air
 ```
