@@ -18,8 +18,9 @@ import (
 )
 
 func main() {
-	db, err := gorm.Open("postgres", fmt.Sprintf("host=%s port=%s user=%s dbname=%s password=%s sslmode=disable", os.Getenv("SCOUT_DB_HOST"), os.Getenv("SCOUT_DB_PORT"), os.Getenv("SCOUT_DB_USER"), os.Getenv("SCOUT_DB_NAME"), os.Getenv("SCOUT_DB_PASSWORD")))
+	db, err := gorm.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
+		fmt.Println("error connecting to DB,", err)
 		return
 	}
 

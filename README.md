@@ -21,7 +21,6 @@ Note: Commands can also be triggered by `@Scout [command]`
 Install:
 - [Golang](https://golang.org/)
 - [go-watcher](https://github.com/canthefason/go-watcher)
-- [sops](https://github.com/mozilla/sops)
 
 Set environment variables:
 ```
