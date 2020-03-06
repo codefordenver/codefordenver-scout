@@ -28,16 +28,19 @@ func main() {
 
 	err = gdrive.New(db)
 	if err != nil {
+		fmt.Println("error starting Drive client,", err)
 		return
 	}
 
 	dg, err := discord.New(db)
 	if err != nil {
+		fmt.Println("error starting Discord client,", err)
 		return
 	}
 
 	err = github.New(db, dg)
 	if err != nil {
+		fmt.Println("error starting GitHub client,", err)
 		return
 	}
 
