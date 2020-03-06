@@ -20,7 +20,7 @@ Note: Commands can also be triggered by `@Scout [command]`
 ### Setup
 Install:
 - [Golang](https://golang.org/)
-- [go-watcher](https://github.com/canthefason/go-watcher)
+- [air](https://github.com/cosmtrek/air)
 
 Set environment variables:
 ```
@@ -30,11 +30,7 @@ SCOUT_TOKEN=discord bot token
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
-SCOUT_DB_URL=host for database
-SCOUT_DB_PORT=port for database
-SCOUT_DB_USER=user for database
-SCOUT_DB_NAME=name of database
-SCOUT_DB_PASSWORD=password for database
+DATABASE_URL=full postgres connection string
 ```
 Get these values from a current project member
 
@@ -42,5 +38,5 @@ View `models/` for the database schema.
 
 To run the bot, simply navigate to the project directory and run:
 ```
-watcher
+air
 ```
