@@ -852,9 +852,8 @@ func orEmpty(str, defaultStr string) string {
 func argCountFmt(argCount int) string {
 	if argCount == 1 {
 		return "∞"
-	} else {
-		return strconv.Itoa(argCount)
 	}
+	return strconv.Itoa(argCount);
 }
 
 func containsUser(slice []*discordgo.User, value *discordgo.User) bool {
