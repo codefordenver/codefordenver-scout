@@ -21,26 +21,37 @@ Note: Commands can also be triggered by `@Scout [command]`
 Install:
 - [Golang](https://golang.org/)
 - [go-watcher](https://github.com/canthefason/go-watcher)
+- [PostgreSQL](https://www.postgresql.org/download/)
 
 Set environment variables:
 ```
-AWS_ACCESS_KEY_ID=AWS key ID for sops
-AWS_SECRET_ACCESS_KEY=AWS key secret for sops
 SCOUT_TOKEN=discord bot token
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
-SCOUT_DB_URL=host for database
-SCOUT_DB_PORT=port for database
-SCOUT_DB_USER=user for database
-SCOUT_DB_NAME=name of database
-SCOUT_DB_PASSWORD=password for database
+DATABASE_URL=full postgres connection URL
 ```
 Get these values from a current project member
 
 View `models/` for the database schema.
 
-To run the bot, simply navigate to the project directory and run:
+PostgreSQL setup:
+
+1. Create postgres user (if not handled by installation):
+
+   `createuser postgres --superuser --pwprompt`
+
+    And set the password to `postgres` for development.
+
+2. Create Database
+   
+   `createdb codefordenver-scout_development --owner=postgres`
+
+    And 
+
+Running
+
+1. To run the bot, simply navigate to the project directory and run:
 ```
 watcher
 ```
