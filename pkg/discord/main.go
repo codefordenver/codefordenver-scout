@@ -292,7 +292,7 @@ func New(dbConnection *gorm.DB) (*discordgo.Session, error) {
 	cmdHandler.RegisterCommand(fetchFileCommand)
 
 	permissions = make(map[int]Permission)
-	permissions[1] = PermissionMember
+	permissions[1] = PermissionAdmin
 	maintainProjectCommand := Command{
 		Keyword:    "maintain",
 		Handler:    maintainProject,
