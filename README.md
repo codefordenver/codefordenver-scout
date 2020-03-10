@@ -47,8 +47,8 @@ PostgreSQL setup:
    
    `createdb codefordenver-scout_development --owner=postgres`
 
-    And 
-
+    At this point, you should be able to run the bot with `air` and receive `error fetching brigade, record not found`. To fix this, either create a mock-up Discord server on which to test and populate the brigades table with `INSERT INTO brigades`, or request a database dump file from a project member to restore from using `psql codefordenver-scout_development postgres < [dumpfile location]`
+    
 Running
 
 1. To run the bot, simply navigate to the project directory and run:

@@ -7,7 +7,7 @@ import (
 
 type VolunteerSession struct {
 	ID            int    `gorm:"not null"`
-	BrigadeID     string `gorm:"not null"`
+	BrigadeID     int `gorm:"not null"`
 	Brigade       Brigade
 	DiscordUserID string        `gorm:"not null"`
 	StartTime     time.Time     `gorm:"not null"`
