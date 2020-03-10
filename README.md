@@ -8,7 +8,6 @@ Commands:
 - `!onboardall` - Converts all users with new or onboarding role to member role
 - `!onboard` - Converts all users with onboarding role to member role
 - `!agenda` - Fetches the agenda for the next meeting, or creates and returns it if it does not exist
-- `!list-projects` - Messages the user a list of available projects
 - `!join [project name]` - Adds user to the project
 - `!leave [project name]` - Removes user from the project
 - `!maintain [project name]` - Moves a project to maintenance
@@ -21,43 +20,38 @@ Note: Commands can also be triggered by `@Scout [command]`
 ### Setup
 Install:
 - [Golang](https://golang.org/)
-- [sops](https://github.com/mozilla/sops)
+- [PostgreSQL](https://www.postgresql.org/download/)
 - [air](https://github.com/cosmtrek/air)
 
 Set environment variables:
 ```
-AWS_ACCESS_KEY_ID=AWS key ID for sops
-AWS_SECRET_ACCESS_KEY=AWS key secret for sops
 SCOUT_TOKEN=discord bot token
-AIRTABLE_API_KEY=Airtable account key
 GDRIVE_CREDS=base64 str version of credentials.json
 GDRIVE_ACCESS_TOKEN=base64 str version of token.json
 GITHUB_CREDS=base64 str version of github pem file
+DATABASE_URL=full postgres connection string
 ```
 Get these values from a current project member
 
-Example config.yaml:
-```yaml
-Brigades:
--   GuildID: "5356701682701XXXXX"
-    ActiveProjectCategoryID: "5356777664573XXXXX"
-    EveryoneRole: "5356701682701XXXXX" #Yes, this is the same as the GuildID, they are separated for clarity
-    NewRole: "5738722616191XXXXX"
-    OnboardingRole: "5783212265866XXXXX"
-    MemberRole: "5726261632482XXXXX"
-    OnboardingInviteCode: "XXXXXX"
-    CodeOfConductMessageID: "5802051351128XXXXX"
-    AgendaFolderID: "1NL1M9G0iJVwNDa7kRL1rqypUnafXXXXX"
-    LocationString: "America/Denver"
-    AirtableBaseID: "appXXXXXXXXXXXXXX"
-    GithubOrg: "codefordenver"
-    IssueEmoji: "➡"
+View `models/` for the database schema.
 
-The configuration file should be encrypted via sops. Contact a Code for Denver member to have your configuration info added & encrypted. 
+PostgreSQL setup:
 
-```
+1. Create postgres user (if not handled by installation):
 
-To run the bot, simply navigate to the project directory and run:
+   `createuser postgres --superuser --pwprompt`
+
+    And set the password to `postgres` for development.
+
+2. Create Database
+   
+   `createdb codefordenver-scout_development --owner=postgres`
+
+    At this point, you should be able to run the bot with `air` and receive `error fetching brigade, record not found`. To fix this, either create a mock-up Discord server on which to test and populate the brigades table with `INSERT INTO brigades`, or request a database dump file from a project member to restore from using `psql codefordenver-scout_development postgres < [dumpfile location]`
+    
+Running
+
+1. To run the bot, simply navigate to the project directory and run:
 ```
 air
 ```

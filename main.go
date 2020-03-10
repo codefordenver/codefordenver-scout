@@ -3,12 +3,12 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/codefordenver/codefordenver-scout/global"
+	"github.com/codefordenver/codefordenver-scout/migrations"
 	"github.com/codefordenver/codefordenver-scout/pkg/discord"
 	"github.com/codefordenver/codefordenver-scout/pkg/gdrive"
 	"github.com/codefordenver/codefordenver-scout/pkg/github"
-	"go.mozilla.org/sops/decrypt"
-	"gopkg.in/yaml.v2"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"log"
 	"net/http"
 	"os"
@@ -17,40 +17,30 @@ import (
 	"time"
 )
 
-type Brigades struct {
-	Brigades []global.Brigade `yaml:"Brigades"`
-}
-
-func init() {
-	global.AirtableKey = os.Getenv("AIRTABLE_API_KEY")
-}
-
 func main() {
-	config, err := decrypt.File("config.yaml", "yaml")
+	db, err := gorm.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
-		log.Fatal("error decoding configuration, ", err)
-	}
-
-	var b Brigades
-
-	if err = yaml.Unmarshal(config, &b); err != nil {
-		log.Fatal("error parsing configuration file,", err)
-	}
-
-	global.Brigades = b.Brigades
-
-	err = gdrive.Create()
-	if err != nil {
+		fmt.Println("error connecting to DB,", err)
 		return
 	}
 
-	dg, err := discord.Create()
+	migrations.Migrate(db)
+
+	err = gdrive.New(db)
 	if err != nil {
+		fmt.Println("error starting Drive client,", err)
 		return
 	}
 
-	err = github.Create(dg)
+	dg, err := discord.New(db)
 	if err != nil {
+		fmt.Println("error starting Discord client,", err)
+		return
+	}
+
+	err = github.New(db, dg)
+	if err != nil {
+		fmt.Println("error starting GitHub client,", err)
 		return
 	}
 

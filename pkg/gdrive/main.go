@@ -5,7 +5,9 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/codefordenver/codefordenver-scout/global"
+	"github.com/codefordenver/codefordenver-scout/models"
+	"github.com/codefordenver/codefordenver-scout/pkg/shared"
+	"github.com/jinzhu/gorm"
 	"github.com/rickar/cal"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/option"
@@ -18,7 +20,7 @@ import (
 	"google.golang.org/api/drive/v3"
 )
 
-var calendars map[*global.Brigade]*cal.Calendar
+var calendars map[int]*cal.Calendar
 
 func Monday(date time.Time) time.Time {
 	weekdayInt := int(date.Weekday())
@@ -50,9 +52,12 @@ func isMeetingDay(date time.Time) bool {
 }
 
 var client *drive.Service
+var db *gorm.DB
 
 // Create a drive API client and calendar object for meeting tracking
-func Create() error {
+func New(dbConnection *gorm.DB) error {
+	db = dbConnection
+
 	credsEnv := os.Getenv("GDRIVE_CREDS")
 	creds, err := base64.StdEncoding.DecodeString(credsEnv)
 	if err != nil {
@@ -78,12 +83,20 @@ func Create() error {
 		return err
 	}
 
-	calendars = make(map[*global.Brigade]*cal.Calendar, 0)
+	calendars = make(map[int]*cal.Calendar, 0)
 
-	for i := range global.Brigades {
-		brigade := &global.Brigades[i]
-		calendars[brigade] = cal.NewCalendar()
-		cal.AddUsHolidays(calendars[brigade])
+	var brigades []models.Brigade
+	if err = db.Find(&brigades).Error; err != nil {
+		fmt.Println("error fetching all brigades,", err)
+		return err
+	}
+
+	for _, brigade := range brigades {
+		calendars[brigade.ID] = &cal.Calendar{
+			WorkdayFunc: isMeetingDay,
+			Observed:    cal.ObservedExact,
+		}
+		cal.AddUsHolidays(calendars[brigade.ID])
 	}
 
 	return nil
@@ -170,9 +183,8 @@ func saveToken(path string, token *oauth2.Token) error {
 	return nil
 }
 
-func FetchAgenda(brigade *global.Brigade) (string, []string) {
-
-	location, err := time.LoadLocation(brigade.LocationString)
+func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
+	location, err := time.LoadLocation(data.Brigade.TimezoneString)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -180,7 +192,7 @@ func FetchAgenda(brigade *global.Brigade) (string, []string) {
 
 	nextMeetingDate := time.Date(date.Year(), date.Month(), 1, 0, 0, 0, 0, location)
 
-	c := calendars[brigade]
+	c := calendars[data.Brigade.ID]
 
 	if c.IsWorkday(date) {
 		nextMeetingDate = nextMeetingDate.AddDate(0, 0, date.Day()-1)
@@ -195,23 +207,35 @@ func FetchAgenda(brigade *global.Brigade) (string, []string) {
 		Fields("files(name, webViewLink)").Do()
 	if err != nil {
 		fmt.Println("error fetching files,", err)
-		return "", []string{"Error fetching files from Google Drive"}
+		return shared.FunctionResponse{
+			ChannelID: data.ChannelID,
+			Error:     "Failed to fetch files from Google Drive. Try again later.",
+		}
 	}
 	var agenda *drive.File
 	if len(r.Files) == 0 {
-		r, err = client.Files.List().Q(fmt.Sprintf("'%s' in parents", brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
+		r, err = client.Files.List().Q(fmt.Sprintf("'%s' in parents", data.Brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
 		if err != nil {
 			fmt.Println("error fetching files,", err)
-			return "", []string{"Error fetching files from Google Drive"}
+			return shared.FunctionResponse{
+				ChannelID: data.ChannelID,
+				Error:     "Failed to fetch files from Google Drive. Try again later.",
+			}
 		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
 		agenda, err = client.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
 			fmt.Println("error copying file,", err)
-			return "", []string{"Error creating new agenda"}
+			return shared.FunctionResponse{
+				ChannelID: data.ChannelID,
+				Error:     "Failed to create new agenda. Try again later.",
+			}
 		}
 	} else {
 		agenda = r.Files[0]
 	}
-	return fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink), nil
+	return shared.FunctionResponse{
+		ChannelID: data.ChannelID,
+		Success:   fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink),
+	}
 }
