@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Permission int
@@ -24,11 +25,11 @@ const (
 )
 
 type Command struct {
-	Keyword    string
-	Handler    func(shared.CommandData) []shared.FunctionResponse
+	Keyword       string
+	Handler       func(shared.CommandData) []shared.FunctionResponse
 	PermissionMap map[int]Permission
-	MinArgs int
-	MaxArgs int
+	MinArgs       int
+	MaxArgs       int
 }
 
 type CommandHandler struct {
@@ -206,99 +207,123 @@ func New(dbConnection *gorm.DB) (*discordgo.Session, error) {
 	permissions := make(map[int]Permission)
 	permissions[0] = PermissionMember
 	onboardCommand := Command{
-		Keyword:    "onboard",
-		Handler:    onboard,
+		Keyword:       "onboard",
+		Handler:       onboard,
 		PermissionMap: permissions,
-		MinArgs: 0,
-		MaxArgs: 0,
+		MinArgs:       0,
+		MaxArgs:       0,
 	}
 	cmdHandler.RegisterCommand(onboardCommand)
 
 	permissions = make(map[int]Permission)
 	permissions[0] = PermissionMember
 	onboardAllCommand := Command{
-		Keyword:    "onboardall",
-		Handler:    onboardAll,
+		Keyword:       "onboardall",
+		Handler:       onboardAll,
 		PermissionMap: permissions,
-		MinArgs: 0,
-		MaxArgs: 0,
+		MinArgs:       0,
+		MaxArgs:       0,
 	}
 	cmdHandler.RegisterCommand(onboardAllCommand)
 
 	permissions = make(map[int]Permission)
 	permissions[0] = PermissionChannel
 	getAgendaCommand := Command{
-		Keyword:    "agenda",
-		Handler:    getAgenda,
+		Keyword:       "agenda",
+		Handler:       getAgenda,
 		PermissionMap: permissions,
-		MinArgs: 0,
-		MaxArgs: 0,
+		MinArgs:       0,
+		MaxArgs:       0,
 	}
 	cmdHandler.RegisterCommand(getAgendaCommand)
 
 	permissions = make(map[int]Permission)
 	permissions[1] = PermissionMember
 	joinCommand := Command{
-		Keyword:    "join",
-		Handler:    joinProject,
+		Keyword:       "join",
+		Handler:       joinProject,
 		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		MinArgs:       1,
+		MaxArgs:       1,
 	}
 	cmdHandler.RegisterCommand(joinCommand)
 
 	permissions = make(map[int]Permission)
 	permissions[1] = PermissionMember
 	leaveCommand := Command{
-		Keyword:    "leave",
-		Handler:    leaveProject,
+		Keyword:       "leave",
+		Handler:       leaveProject,
 		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		MinArgs:       1,
+		MaxArgs:       1,
 	}
 	cmdHandler.RegisterCommand(leaveCommand)
 
 	permissions = make(map[int]Permission)
 	permissions[2] = PermissionAdmin
 	trackCommand := Command{
-		Keyword:    "track",
-		Handler:    trackFile,
+		Keyword:       "track",
+		Handler:       trackFile,
 		PermissionMap: permissions,
-		MinArgs: 2,
-		MaxArgs: 2,
+		MinArgs:       2,
+		MaxArgs:       2,
 	}
 	cmdHandler.RegisterCommand(trackCommand)
 
 	permissions = make(map[int]Permission)
 	permissions[1] = PermissionAdmin
 	untrackCommand := Command{
-		Keyword:    "untrack",
-		Handler:    untrackFile,
+		Keyword:       "untrack",
+		Handler:       untrackFile,
 		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		MinArgs:       1,
+		MaxArgs:       1,
 	}
 	cmdHandler.RegisterCommand(untrackCommand)
 
 	permissions = make(map[int]Permission)
 	permissions[1] = PermissionMember
 	fetchFileCommand := Command{
-		Keyword:    "fetch",
-		Handler:    fetchFileDispatch,
+		Keyword:       "fetch",
+		Handler:       fetchFileDispatch,
 		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		MinArgs:       1,
+		MaxArgs:       1,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
 
 	permissions = make(map[int]Permission)
+	permissions[0] = PermissionMember
+	permissions[-1] = PermissionMember
+	checkInCommand := Command{
+		Keyword:       "in",
+		Handler:       checkIn,
+		PermissionMap: permissions,
+		MinArgs:       0,
+		MaxArgs:       -1,
+	}
+	cmdHandler.RegisterCommand(checkInCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[0] = PermissionMember
+	permissions[-1] = PermissionMember
+	checkOutCommand := Command{
+		Keyword:       "out",
+		Handler:       checkOut,
+		PermissionMap: permissions,
+		MinArgs:       0,
+		MaxArgs:       -1,
+	}
+	cmdHandler.RegisterCommand(checkOutCommand)
+
+	permissions = make(map[int]Permission)
 	permissions[1] = PermissionAdmin
 	maintainProjectCommand := Command{
-		Keyword:    "maintain",
-		Handler:    maintainProject,
+		Keyword:       "maintain",
+		Handler:       maintainProject,
 		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		MinArgs:       1,
+		MaxArgs:       1,
 	}
 	cmdHandler.RegisterCommand(maintainProjectCommand)
 
@@ -306,22 +331,22 @@ func New(dbConnection *gorm.DB) (*discordgo.Session, error) {
 	permissions[2] = PermissionAdmin
 	permissions[-1] = PermissionAdmin
 	championsCommand := Command{
-		Keyword:    "champion",
-		Handler:    setChampions,
+		Keyword:       "champion",
+		Handler:       setChampions,
 		PermissionMap: permissions,
-		MinArgs: 2,
-		MaxArgs: -1,
+		MinArgs:       2,
+		MaxArgs:       -1,
 	}
 	cmdHandler.RegisterCommand(championsCommand)
 
 	permissions = make(map[int]Permission)
 	permissions[1] = PermissionDM
 	githubCommand := Command{
-		Keyword:    "github",
-		Handler:    sendGithubUsername,
+		Keyword:       "github",
+		Handler:       sendGithubUsername,
 		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		MinArgs:       1,
+		MaxArgs:       1,
 	}
 	cmdHandler.RegisterCommand(githubCommand)
 
@@ -653,7 +678,7 @@ func trackFile(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Success:     "A file with the name **" + fileName + "** is already tracked: " + file.URL,
+				Success:   "A file with the name **" + fileName + "** is already tracked: " + file.URL,
 			},
 		}
 	} else if err != nil {
@@ -695,7 +720,7 @@ func untrackFile(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Success:     "No file with the name **" + fileName + "** is tracked.",
+				Success:   "No file with the name **" + fileName + "** is tracked.",
 			},
 		}
 	} else if err != nil {
@@ -741,7 +766,7 @@ func fetchFileDispatch(data shared.CommandData) []shared.FunctionResponse {
 		return []shared.FunctionResponse{
 			{
 				ChannelID: data.ChannelID,
-				Success:     "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it",
+				Success:   "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it",
 			},
 		}
 	}
@@ -758,8 +783,7 @@ func fetchFile(data shared.CommandData) (*models.File, error) {
 	fileName := strings.ToLower(data.Args[0])
 	/* file := select all from Files where name matches fileName and brigade ID matches a brigade with data.GuildID*/
 	var files []models.File
-	err := db.Where("name = ? and brigade_id = ?", fileName, data.ID).Find(&files).Error
-	if err != nil {
+	if err := db.Where("name = ? and brigade_id = ?", fileName, data.ID).Find(&files).Error; err != nil {
 		fmt.Println("error fetching file,", err)
 		return nil, err
 	}
@@ -768,6 +792,145 @@ func fetchFile(data shared.CommandData) (*models.File, error) {
 		return &file, nil
 	} else {
 		return nil, nil
+	}
+}
+
+// Check common time formats
+func parseTime(timeStr string) (time.Time, error) {
+	now := time.Now()
+	formats := []string{
+		// Time only
+		"3:04PM",
+		"3:04:05PM",
+		"15:04",
+		"15:04:05",
+		// Date & time
+		"Jan 2 3:04PM",
+		"Jan 2 3:04:05PM",
+		"Jan 2 15:04",
+		"Jan 2 15:04:05",
+		"1/2 3:04PM",
+		"1/2 3:04:05PM",
+		"1/2 15:04",
+		"1/2 15:04:05",
+	}
+	var outTime time.Time
+	var err error
+	for i, format := range formats {
+		if t, err := time.Parse(format, timeStr); err == nil {
+			if i <= 3 {
+				outTime = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), now.Location())
+			} else {
+				outTime = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), now.Location())
+			}
+			fmt.Println(time.Now().Sub(now))
+			return outTime, nil
+		}
+	}
+	return time.Time{}, err
+}
+
+func checkIn(data shared.CommandData) []shared.FunctionResponse {
+	if len(data.Args) == 0 {
+		return startSession(data, time.Now())
+	} else if inTime, err := parseTime(strings.Join(data.Args[0:], " ")); err != nil {
+		return []shared.FunctionResponse{
+			{
+				ChannelID: data.ChannelID,
+				Error:     "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 3:04PM` if you're starting a session from another day.",
+			},
+		}
+	} else {
+		return startSession(data, inTime)
+	}
+}
+
+func startSession(data shared.CommandData, inTime time.Time) []shared.FunctionResponse {
+	session := models.VolunteerSession{
+		BrigadeID:     data.Brigade.ID,
+		DiscordUserID: data.Author.ID,
+		StartTime:     inTime,
+	}
+	if inTime.After(time.Now()) {
+		return []shared.FunctionResponse{
+			{
+				ChannelID: data.ChannelID,
+				Error:     "You can't start a volunteer session in the future. Try an earlier time.",
+			},
+		}
+	}
+	if err := db.Create(&session).Error; err != nil {
+		return []shared.FunctionResponse{
+			{
+				ChannelID: data.ChannelID,
+				Error:     "Failed to start volunteer session. Try again later.",
+			},
+		}
+	}
+	return []shared.FunctionResponse{
+		{
+			ChannelID: data.ChannelID,
+			Success:   "Volunteer session for <@!" + data.Author.ID + "> started. Use `!out` to end your session.",
+		},
+	}
+}
+
+func checkOut(data shared.CommandData) []shared.FunctionResponse {
+	if len(data.Args) == 0 {
+		return endSession(data, time.Now())
+	}
+	if outTime, err := parseTime(strings.Join(data.Args[0:], " ")); err != nil {
+		return []shared.FunctionResponse{
+			{
+				ChannelID: data.ChannelID,
+				Error:     "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 3:04PM` if you're ending a session from another day.",
+			},
+		}
+	} else {
+		return endSession(data, outTime)
+	}
+}
+
+func endSession(data shared.CommandData, outTime time.Time) []shared.FunctionResponse {
+	var session models.VolunteerSession
+	if err := db.First(&session, "discord_user_id = ? and duration is null", data.Author.ID).Error; err != nil {
+		return []shared.FunctionResponse{
+			{
+				ChannelID: data.ChannelID,
+				Error:     "Failed to fetch active volunteer session. Try again later.",
+			},
+		}
+	}
+	if outTime.Before(session.StartTime) {
+		return []shared.FunctionResponse{
+			{
+				ChannelID: data.ChannelID,
+				Error:     "You can't end a volunteer session before it started. Try a later time.",
+			},
+		}
+	}
+	if outTime.After(time.Now()) {
+		return []shared.FunctionResponse{
+			{
+				ChannelID: data.ChannelID,
+				Error:     "You can't end a volunteer session in the future. Try an earlier time.",
+			},
+		}
+	}
+	if err := db.Model(&session).Update("duration", outTime.Round(time.Second).Sub(session.StartTime.Round(time.Second))).Error; err != nil {
+		fmt.Println(err)
+		return []shared.FunctionResponse{
+			{
+				ChannelID: data.ChannelID,
+				Error:     "Failed to end active volunteer session. Try again later.",
+			},
+		}
+	}
+	return []shared.FunctionResponse{
+		{
+			ChannelID: data.ChannelID,
+			Success:   "Ended <@!" + data.Author.ID + ">'s volunteer session, which lasted `" + time.Duration(session.Duration.Int64).Round(time.Second).String() + "`",
+		},
 	}
 }
 
@@ -850,10 +1013,10 @@ func orEmpty(str, defaultStr string) string {
 }
 
 func argCountFmt(argCount int) string {
-	if argCount == 1 {
+	if argCount == -1 {
 		return "∞"
 	}
-	return strconv.Itoa(argCount);
+	return strconv.Itoa(argCount)
 }
 
 func containsUser(slice []*discordgo.User, value *discordgo.User) bool {

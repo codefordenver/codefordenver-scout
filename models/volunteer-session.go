@@ -11,5 +11,5 @@ type VolunteerSession struct {
 	Brigade       Brigade
 	DiscordUserID string        `gorm:"not null"`
 	StartTime     time.Time     `gorm:"not null"`
-	Duration      sql.NullInt32 `gorm:"not null"`
+	Duration      sql.NullInt64
 }
