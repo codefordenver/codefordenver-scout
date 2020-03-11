@@ -26,9 +26,9 @@ const (
 type Command struct {
 	Keyword    string
 	Handler    func(shared.CommandData) []shared.FunctionResponse
-	Permission Permission
-	MinArgs    int
-	MaxArgs    int
+	PermissionMap map[int]Permission
+	MinArgs int
+	MaxArgs int
 }
 
 type CommandHandler struct {
@@ -84,22 +84,27 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 		MessageData: msgData,
 		Args:        args,
 	}
-	/* brigade := select brigades where guildID matches msgData.GuildID */
 	if command, exists := c.Commands[key]; exists {
-		if (command.MinArgs != -1 && len(args) < command.MinArgs) || (command.MaxArgs != -1 && len(args) > command.MaxArgs) {
+		if len(args) < command.MinArgs || (command.MaxArgs != -1 && len(args) > command.MaxArgs) {
 			if command.MinArgs == command.MaxArgs {
-				if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+strconv.Itoa(command.MinArgs)); err != nil {
+				if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)); err != nil {
 					return err
 				}
 			} else {
-				if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+strconv.Itoa(command.MinArgs)+"-"+strconv.Itoa(command.MaxArgs)); err != nil {
+				if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)); err != nil {
 					return err
 				}
 			}
 			return nil
 		}
 		var response []shared.FunctionResponse
-		switch command.Permission {
+		// Check if Permission Map includes provided number of arguments
+		permission, permissionExists := command.PermissionMap[len(args)]
+		if !permissionExists {
+			// Check if Permission Map includes variable argument option
+			permission, permissionExists = command.PermissionMap[-1]
+		}
+		switch permission {
 		case PermissionAdmin:
 			if channel, err := s.Channel(m.ChannelID); err != nil {
 				return err
@@ -198,94 +203,127 @@ func New(dbConnection *gorm.DB) (*discordgo.Session, error) {
 
 	cmdHandler.Commands = make(map[string]Command)
 
+	permissions := make(map[int]Permission)
+	permissions[0] = PermissionMember
 	onboardCommand := Command{
 		Keyword:    "onboard",
 		Handler:    onboard,
-		Permission: PermissionMember,
-		MinArgs:    0,
-		MaxArgs:    0,
+		PermissionMap: permissions,
+		MinArgs: 0,
+		MaxArgs: 0,
 	}
 	cmdHandler.RegisterCommand(onboardCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[0] = PermissionMember
 	onboardAllCommand := Command{
 		Keyword:    "onboardall",
 		Handler:    onboardAll,
-		Permission: PermissionMember,
-		MinArgs:    0,
-		MaxArgs:    0,
+		PermissionMap: permissions,
+		MinArgs: 0,
+		MaxArgs: 0,
 	}
 	cmdHandler.RegisterCommand(onboardAllCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[0] = PermissionChannel
 	getAgendaCommand := Command{
 		Keyword:    "agenda",
 		Handler:    getAgenda,
-		Permission: PermissionChannel,
-		MinArgs:    0,
-		MaxArgs:    0,
+		PermissionMap: permissions,
+		MinArgs: 0,
+		MaxArgs: 0,
 	}
 	cmdHandler.RegisterCommand(getAgendaCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[1] = PermissionMember
 	joinCommand := Command{
 		Keyword:    "join",
 		Handler:    joinProject,
-		Permission: PermissionMember,
-		MinArgs:    1,
-		MaxArgs:    1,
+		PermissionMap: permissions,
+		MinArgs: 1,
+		MaxArgs: 1,
 	}
 	cmdHandler.RegisterCommand(joinCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[1] = PermissionMember
 	leaveCommand := Command{
 		Keyword:    "leave",
 		Handler:    leaveProject,
-		Permission: PermissionMember,
-		MinArgs:    1,
-		MaxArgs:    1,
+		PermissionMap: permissions,
+		MinArgs: 1,
+		MaxArgs: 1,
 	}
 	cmdHandler.RegisterCommand(leaveCommand)
-	championsCommand := Command{
-		Keyword:    "champion",
-		Handler:    setChampions,
-		Permission: PermissionAdmin,
-		MinArgs:    2,
-		MaxArgs:    -1,
-	}
-	cmdHandler.RegisterCommand(championsCommand)
-	githubCommand := Command{
-		Keyword:    "github",
-		Handler:    sendGithubUsername,
-		Permission: PermissionDM,
-		MinArgs:    1,
-		MaxArgs:    1,
-	}
-	cmdHandler.RegisterCommand(githubCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[2] = PermissionAdmin
 	trackCommand := Command{
 		Keyword:    "track",
 		Handler:    trackFile,
-		Permission: PermissionAdmin,
-		MinArgs:    2,
-		MaxArgs:    2,
+		PermissionMap: permissions,
+		MinArgs: 2,
+		MaxArgs: 2,
 	}
 	cmdHandler.RegisterCommand(trackCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[1] = PermissionAdmin
 	untrackCommand := Command{
 		Keyword:    "untrack",
 		Handler:    untrackFile,
-		Permission: PermissionAdmin,
-		MinArgs:    1,
-		MaxArgs:    1,
+		PermissionMap: permissions,
+		MinArgs: 1,
+		MaxArgs: 1,
 	}
 	cmdHandler.RegisterCommand(untrackCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[1] = PermissionMember
 	fetchFileCommand := Command{
 		Keyword:    "fetch",
 		Handler:    fetchFileDispatch,
-		Permission: PermissionMember,
-		MinArgs:    1,
-		MaxArgs:    1,
+		PermissionMap: permissions,
+		MinArgs: 1,
+		MaxArgs: 1,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[1] = PermissionAdmin
 	maintainProjectCommand := Command{
 		Keyword:    "maintain",
 		Handler:    maintainProject,
-		Permission: PermissionAdmin,
-		MinArgs:    1,
-		MaxArgs:    1,
+		PermissionMap: permissions,
+		MinArgs: 1,
+		MaxArgs: 1,
 	}
 	cmdHandler.RegisterCommand(maintainProjectCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[2] = PermissionAdmin
+	permissions[-1] = PermissionAdmin
+	championsCommand := Command{
+		Keyword:    "champion",
+		Handler:    setChampions,
+		PermissionMap: permissions,
+		MinArgs: 2,
+		MaxArgs: -1,
+	}
+	cmdHandler.RegisterCommand(championsCommand)
+
+	permissions = make(map[int]Permission)
+	permissions[1] = PermissionDM
+	githubCommand := Command{
+		Keyword:    "github",
+		Handler:    sendGithubUsername,
+		PermissionMap: permissions,
+		MinArgs: 1,
+		MaxArgs: 1,
+	}
+	cmdHandler.RegisterCommand(githubCommand)
 
 	return dg, nil
 }
@@ -804,6 +842,20 @@ func contains(slice []string, value string) bool {
 	return false
 }
 
+func orEmpty(str, defaultStr string) string {
+	if str == "" {
+		return defaultStr
+	}
+	return str
+}
+
+func argCountFmt(argCount int) string {
+	if argCount == 1 {
+		return "∞"
+	}
+	return strconv.Itoa(argCount);
+}
+
 func containsUser(slice []*discordgo.User, value *discordgo.User) bool {
 	for _, item := range slice {
 		if item.ID == value.ID {
@@ -811,11 +863,4 @@ func containsUser(slice []*discordgo.User, value *discordgo.User) bool {
 		}
 	}
 	return false
-}
-
-func orEmpty(str, defaultStr string) string {
-	if str == "" {
-		return defaultStr
-	}
-	return str
 }
