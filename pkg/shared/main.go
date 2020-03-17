@@ -51,4 +51,6 @@ type CommandData struct {
 	*models.Brigade
 	*models.Project
 	Args []string
+	BrigadeArg string
+	ProjectArg string
 }

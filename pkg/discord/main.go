@@ -116,22 +116,26 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 			if len(cmdData.Args) >= command.MinArgs+2 {
 				if brigade := getBrigade(cmdData.Args[len(cmdData.Args)-2]); brigade != nil { // If second to last argument is a brigade name
 					cmdData.Brigade = brigade
+					cmdData.BrigadeArg = cmdData.Args[len(cmdData.Args)-2]
 					cmdData.Args = append(cmdData.Args[:len(cmdData.Args)-2], cmdData.Args[len(cmdData.Args)-1]) // Remove brigade from argument list for command execution
 					var project *models.Project
 					if project = getProject(cmdData.Args[len(cmdData.Args)-1], brigade.ID); project != nil { // If last argument is a project name
 						cmdData.Project = project
+						cmdData.ProjectArg = cmdData.Args[len(cmdData.Args)-1]
 						cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove project from argument list for command execution
 					} else if project := getChannelProject(channel); project != nil { // If command was run from a project channel
 						cmdData.Project = project
 					}
 				} else if brigade := getBrigade(cmdData.Args[len(cmdData.Args)-1]); brigade != nil { // If last argument is a brigade name
 					cmdData.Brigade = brigade
+					cmdData.BrigadeArg = cmdData.Args[len(cmdData.Args)-1]
 					cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove brigade from argument list for command execution
 				} else if brigade := getChannelBrigade(channel); brigade != nil { // If command was run from a brigade channel, and no brigade argument was provided
 					cmdData.Brigade = brigade
 					var project *models.Project
 					if project = getProject(cmdData.Args[len(cmdData.Args)-1], brigade.ID); project != nil { // If last argument is a project name
 						cmdData.Project = project
+						cmdData.ProjectArg = cmdData.Args[len(cmdData.Args)-1]
 						cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove project from argument list for command execution
 					} else if project := getChannelProject(channel); project != nil { // If command was run from a project channel
 						cmdData.Project = project
@@ -140,18 +144,20 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 			} else if len(cmdData.Args) >= command.MinArgs+1 {
 				if brigade := getBrigade(cmdData.Args[len(cmdData.Args)-1]); brigade != nil { // If last argument is a brigade name
 					cmdData.Brigade = brigade
+					cmdData.BrigadeArg = cmdData.Args[len(cmdData.Args)-1]
 					cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove brigade from argument list for command execution
 				} else if brigade := getChannelBrigade(channel); brigade != nil { // If command was run from a brigade channel, and no brigade argument was provided
 					cmdData.Brigade = brigade
 					var project *models.Project
 					if project = getProject(cmdData.Args[len(cmdData.Args)-1], brigade.ID); project != nil { // If last argument is a project name
 						cmdData.Project = project
+						cmdData.ProjectArg = cmdData.Args[len(cmdData.Args)-1]
 						cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove project from argument list for command execution
 					} else if project := getChannelProject(channel); project != nil { // If command was run from a project channel
 						cmdData.Project = project
 					}
 				}
-			} else { // If no arguments were provided, find brigade & project from channel
+			} else {                                                       // If no arguments were provided, find brigade & project from channel
 				if brigade := getChannelBrigade(channel); brigade != nil { // If command was run from a brigade channel, and no brigade argument was provided
 					cmdData.Brigade = brigade
 				}
@@ -376,6 +382,16 @@ func New(dbConnection *gorm.DB) (*discordgo.Session, error) {
 		MaxArgs:           -1,
 	}
 	cmdHandler.RegisterCommand(checkOutCommand)
+
+	getTimeCommand := Command{
+		Keyword:          "time",
+		Handler:          getTime,
+		ExecutionContext: shared.ContextAny,
+		Permission:       shared.PermissionEveryone,
+		MinArgs:          0,
+		MaxArgs:          0,
+	}
+	cmdHandler.RegisterCommand(getTimeCommand)
 
 	maintainProjectCommand := Command{
 		Keyword:          "maintain",
@@ -1000,7 +1016,7 @@ func checkOut(data shared.CommandData) shared.CommandResponse {
 	var err error
 	if len(data.Args) == 0 {
 		return endSession(data, time.Now())
-	} else if tz, err = time.LoadLocation(data.Brigade.TimezoneString); err != nil{
+	} else if tz, err = time.LoadLocation(data.Brigade.TimezoneString); err != nil {
 		tz = time.Local
 	}
 	if outTime, err := parseTime(strings.Join(data.Args[0:], " "), tz); err == nil {
@@ -1142,6 +1158,67 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 	}
 }
 
+/*func getTimePermissions(args []string) shared.Permission {
+
+}
+
+func geTimeContexts(args []string) shared.ExecutionContext {
+
+}*/
+
+func getTime(data shared.CommandData) shared.CommandResponse {
+	var totalTimeNano int
+	if data.ProjectArg != "" {
+		if err := db.Model(models.VolunteerSession{}).Select("sum(duration)").Where("brigade_id = ? and project_id = ?", data.Brigade.ID, data.Project.ID).Row().Scan(&totalTimeNano); err != nil {
+			fmt.Println("error summing durations", err)
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch volunteering sessions",
+				},
+			}
+		} else {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Success:   fmt.Sprintf("Total time: %v", time.Duration(totalTimeNano)),
+			}
+		}
+	} else if data.BrigadeArg != "" {
+		if err := db.Model(models.VolunteerSession{}).Select("sum(duration)").Where("brigade_id = ?", data.Brigade.ID).Row().Scan(&totalTimeNano); err != nil {
+			fmt.Println("error summing durations", err)
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch volunteering sessions",
+				},
+			}
+		} else {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Success:   fmt.Sprintf("Total time: %v", time.Duration(totalTimeNano)),
+			}
+		}
+	} else {
+		if err := db.Model(models.VolunteerSession{}).Select("sum(duration)").Where("discord_user_id = ?", data.Author.ID).Row().Scan(&totalTimeNano); err != nil {
+			fmt.Println("error summing durations", err)
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch volunteering sessions",
+				},
+			}
+		} else {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Success:   fmt.Sprintf("Total time: %v", time.Duration(totalTimeNano)),
+			}
+		}
+	}
+}
+
 // Move project to maintenance
 func maintainProject(data shared.CommandData) shared.CommandResponse {
 	channel, err := data.Session.Channel(data.Project.DiscordChannelID)
@@ -1173,7 +1250,7 @@ func maintainProject(data shared.CommandData) shared.CommandResponse {
 		fmt.Println("error editing guild channel,", err)
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
-			Error:     shared.CommandError{
+			Error: shared.CommandError{
 				ErrorType:   shared.ExecutionError,
 				ErrorString: "Failed to move discussion channel for **" + data.Project.Name + "**. Have an administrator do this manually.",
 			},
