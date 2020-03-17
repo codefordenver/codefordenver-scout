@@ -5,10 +5,39 @@ import (
 	"github.com/codefordenver/codefordenver-scout/models"
 )
 
-type FunctionResponse struct {
+type Permission int
+
+type ExecutionContext int
+
+type ErrorType int
+
+const (
+	ContextDM ExecutionContext = 1 << iota
+	ContextBrigade
+	ContextProject
+	ContextAny = ContextBrigade | ContextProject | ContextDM
+)
+
+const (
+	PermissionAdmin Permission = 1 << iota
+	PermissionMember
+	PermissionEveryone
+)
+
+const (
+	ArgumentError ErrorType = iota
+	ExecutionError
+)
+
+type CommandError struct {
+	ErrorType
+	ErrorString string
+}
+
+type CommandResponse struct {
 	ChannelID string
-	Success string
-	Error string
+	Success   string
+	Error     CommandError
 }
 
 type MessageData struct {
@@ -19,6 +48,7 @@ type MessageData struct {
 type CommandData struct {
 	Session *discordgo.Session
 	MessageData
-	models.Brigade
-	Args   []string
+	*models.Brigade
+	*models.Project
+	Args []string
 }

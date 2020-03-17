@@ -183,7 +183,7 @@ func saveToken(path string, token *oauth2.Token) error {
 	return nil
 }
 
-func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
+func FetchAgenda(data shared.CommandData) shared.CommandResponse {
 	location, err := time.LoadLocation(data.Brigade.TimezoneString)
 	if err != nil {
 		fmt.Println(err)
@@ -207,9 +207,12 @@ func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 		Fields("files(name, webViewLink)").Do()
 	if err != nil {
 		fmt.Println("error fetching files,", err)
-		return shared.FunctionResponse{
+		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
-			Error:     "Failed to fetch files from Google Drive. Try again later.",
+			Error:     shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to fetch files from Google Drive. Try again later.",
+			},
 		}
 	}
 	var agenda *drive.File
@@ -217,24 +220,30 @@ func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 		r, err = client.Files.List().Q(fmt.Sprintf("'%s' in parents", data.Brigade.AgendaFolderID)).OrderBy("modifiedTime desc").PageSize(1).Fields("files(id, parents)").Do()
 		if err != nil {
 			fmt.Println("error fetching files,", err)
-			return shared.FunctionResponse{
+			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to fetch files from Google Drive. Try again later.",
+				Error:     shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch files from Google Drive. Try again later.",
+				},
 			}
 		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
 		agenda, err = client.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
 			fmt.Println("error copying file,", err)
-			return shared.FunctionResponse{
+			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to create new agenda. Try again later.",
+				Error:     shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to create new agenda. Try again later.",
+				},
 			}
 		}
 	} else {
 		agenda = r.Files[0]
 	}
-	return shared.FunctionResponse{
+	return shared.CommandResponse{
 		ChannelID: data.ChannelID,
 		Success:   fmt.Sprintf("%s - %s", agenda.Name, agenda.WebViewLink),
 	}

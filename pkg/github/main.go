@@ -358,7 +358,7 @@ func handleRepositoryDelete(repo Repository) {
 }
 
 // Dispatch a username to the appropriate waitlist
-func DispatchUsername(data shared.MessageData, githubName string) shared.FunctionResponse {
+func DispatchUsername(data shared.MessageData, githubName string) shared.CommandResponse {
 	var validChampion, validTeamMember bool
 	var errorMessage string
 	var successMessage string
@@ -367,8 +367,8 @@ func DispatchUsername(data shared.MessageData, githubName string) shared.Functio
 		if res.Success != "" {
 			successMessage += res.Success + "\n"
 		}
-		if res.Error != "" {
-			errorMessage += res.Error + "\n"
+		if res.Error.ErrorString != "" {
+			errorMessage += res.Error.ErrorString + "\n"
 		}
 	}
 	if _, validTeamMember = teamWaitlist[data.Author.ID]; validTeamMember {
@@ -376,20 +376,26 @@ func DispatchUsername(data shared.MessageData, githubName string) shared.Functio
 		if res.Success != "" {
 			successMessage += res.Success + "\n"
 		}
-		if res.Error != "" {
-			errorMessage += res.Error + "\n"
+		if res.Error.ErrorString != "" {
+			errorMessage += res.Error.ErrorString + "\n"
 		}
 	}
 	if !validChampion && !validTeamMember {
-		return shared.FunctionResponse{
+		return shared.CommandResponse{
 			ChannelID: data.Author.ID,
-			Error:     "Was not expecting a GitHub username from you. Have you either `!join`'ed a project or been requested to be a project champion?",
+			Error:     shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Was not expecting a GitHub username from you. Have you either `!join`'ed a project or been requested to be a project champion?",
+			},
 		}
 	}
-	return shared.FunctionResponse{
+	return shared.CommandResponse{
 		ChannelID: data.Author.ID,
 		Success:   successMessage,
-		Error:     errorMessage,
+		Error:     shared.CommandError{
+			ErrorType:   shared.ExecutionError,
+			ErrorString: errorMessage,
+		},
 	}
 }
 
@@ -402,19 +408,22 @@ func AddUserToChampionWaitlist(discordUser string, owner, project string) {
 }
 
 // Actually makes a user project champion
-func setProjectChampion(discordUser, githubName string) shared.FunctionResponse {
+func setProjectChampion(discordUser, githubName string) shared.CommandResponse {
 	opt := github.RepositoryAddCollaboratorOptions{
 		Permission: "admin",
 	}
 	championSetData := championWaitlist[discordUser]
 	if _, err := client.Repositories.AddCollaborator(context.Background(), championSetData.Owner, championSetData.Project, githubName, &opt); err != nil {
-		return shared.FunctionResponse{
+		return shared.CommandResponse{
 			ChannelID: discordUser,
-			Error:     "Failed to give you administrator access to " + championSetData.Project + ". Please contact a brigade captain to manually add you.",
+			Error:     shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to give you administrator access to " + championSetData.Project + ". Please contact a brigade captain to manually add you.",
+			},
 		}
 	} else {
 		delete(championWaitlist, discordUser)
-		return shared.FunctionResponse{
+		return shared.CommandResponse{
 			ChannelID: discordUser,
 			Success:   "You've been added as a champion of " + championSetData.Project,
 		}
@@ -430,7 +439,7 @@ func AddUserToTeamWaitlist(discordUser, owner, team string) {
 }
 
 // Actually adds user to team(and therefore GitHub org)
-func addUserToTeam(channelID, discordUser, githubName string) shared.FunctionResponse {
+func addUserToTeam(channelID, discordUser, githubName string) shared.CommandResponse {
 	teamAddData := teamWaitlist[discordUser]
 	nextPage := 0
 	for moreTeams := true; moreTeams; moreTeams = nextPage != 0 {
@@ -449,13 +458,16 @@ func addUserToTeam(channelID, discordUser, githubName string) shared.FunctionRes
 					opts := github.TeamAddTeamMembershipOptions{Role: "member"}
 					if _, _, err = client.Teams.AddTeamMembership(context.Background(), *team.ID, githubName, &opts); err != nil {
 						fmt.Println("error adding user to GitHub team,", err)
-						return shared.FunctionResponse {
+						return shared.CommandResponse{
 							ChannelID: channelID,
-							Error:     "Failed to add you to the GitHub team **" + teamAddData.Team + "**. Try again later.",
+							Error:     shared.CommandError{
+								ErrorType:   shared.ExecutionError,
+								ErrorString: "Failed to add you to the GitHub team **" + teamAddData.Team + "**. Try again later.",
+							},
 						}
 					}
 					delete(teamWaitlist, discordUser)
-					return shared.FunctionResponse {
+					return shared.CommandResponse{
 						ChannelID: channelID,
 						Success:   "You've been added to **" + teamAddData.Team + "**",
 					}
@@ -463,31 +475,33 @@ func addUserToTeam(channelID, discordUser, githubName string) shared.FunctionRes
 			}
 		}
 	}
-	return shared.FunctionResponse {
+	return shared.CommandResponse{
 		ChannelID: channelID,
-		Error:     "Failed to find the GitHub team for **" + teamAddData.Team + "**. Try again later.",
+		Error:     shared.CommandError{
+			ErrorType:   shared.ExecutionError,
+			ErrorString: "Failed to find the GitHub team for **" + teamAddData.Team + "**. Try again later.",
+		},
 	}
 }
 
 // Creates an issue
-func CreateIssue(text string, brigade models.Brigade, channel discordgo.Channel) []shared.FunctionResponse {
-	issue := github.IssueRequest {
+func CreateIssue(text string, brigade models.Brigade, channel discordgo.Channel) shared.CommandResponse {
+	issue := github.IssueRequest{
 		Title: &text,
 	}
 	if issue, _, err := client.Issues.Create(context.Background(), brigade.GithubOrganization, channel.Name, &issue); err != nil {
 		fmt.Println("error creating GitHub issue,", err)
-		return []shared.FunctionResponse {
-			{
-				ChannelID: channel.ID,
-				Error:     "Failed to create GitHub issue on " + channel.Name + ". Try again later.",
+		return shared.CommandResponse{
+			ChannelID: channel.ID,
+			Error:     shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to create GitHub issue on " + channel.Name + ". Try again later.",
 			},
 		}
 	} else {
-		return []shared.FunctionResponse {
-			{
-				ChannelID: channel.ID,
-				Success:   "Issue created: " + *issue.URL,
-			},
+		return shared.CommandResponse{
+			ChannelID: channel.ID,
+			Success:   "Issue created: " + *issue.URL,
 		}
 	}
 }
