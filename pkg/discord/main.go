@@ -870,7 +870,7 @@ func isTime(timeStr string) bool {
 }
 
 // Check common time formats
-func parseTime(timeStr string) (time.Time, error) {
+func parseTime(timeStr string, location *time.Location) (time.Time, error) {
 	if isTime(timeStr) {
 		now := time.Now()
 		formats := []string{
@@ -894,9 +894,9 @@ func parseTime(timeStr string) (time.Time, error) {
 		for i, format := range formats {
 			if t, err := time.Parse(format, timeStr); err == nil {
 				if i <= 3 {
-					outTime = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), now.Location())
+					outTime = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), location)
 				} else {
-					outTime = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), now.Location())
+					outTime = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), location)
 				}
 				return outTime, nil
 			}
@@ -908,9 +908,14 @@ func parseTime(timeStr string) (time.Time, error) {
 }
 
 func checkIn(data shared.CommandData) shared.CommandResponse {
+	var tz *time.Location
+	var err error
 	if len(data.Args) == 0 {
 		return startSession(data, time.Now())
-	} else if inTime, err := parseTime(strings.Join(data.Args[0:], " ")); err != nil {
+	} else if tz, err = time.LoadLocation(data.Brigade.TimezoneString); err != nil {
+		tz = time.Local
+	}
+	if inTime, err := parseTime(strings.Join(data.Args[0:], " "), tz); err != nil {
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
@@ -991,9 +996,14 @@ func checkOutPermissions(args []string) shared.Permission {
 }
 
 func checkOut(data shared.CommandData) shared.CommandResponse {
+	var tz *time.Location
+	var err error
 	if len(data.Args) == 0 {
 		return endSession(data, time.Now())
-	} else if outTime, err := parseTime(strings.Join(data.Args[0:], " ")); err == nil {
+	} else if tz, err = time.LoadLocation(data.Brigade.TimezoneString); err != nil{
+		tz = time.Local
+	}
+	if outTime, err := parseTime(strings.Join(data.Args[0:], " "), tz); err == nil {
 		return endSession(data, outTime)
 	} else if data.Args[0] == "all" {
 		var sessions []models.VolunteerSession
@@ -1009,7 +1019,7 @@ func checkOut(data shared.CommandData) shared.CommandResponse {
 		var outTime time.Time
 		if len(data.Args) > 1 {
 			var timeErr error
-			if outTime, timeErr = parseTime(strings.Join(data.Args[1:], " ")); timeErr != nil {
+			if outTime, timeErr = parseTime(strings.Join(data.Args[1:], " "), tz); timeErr != nil {
 				return shared.CommandResponse{
 					ChannelID: data.ChannelID,
 					Error: shared.CommandError{
@@ -1059,7 +1069,7 @@ func checkOut(data shared.CommandData) shared.CommandResponse {
 				} else {
 					users = append(users, discordUser)
 				}
-			} else if outTime, timeErr := parseTime(strings.Join(data.Args[i:], " ")); timeErr != nil && i != len(data.Args)-1 {
+			} else if outTime, timeErr := parseTime(strings.Join(data.Args[i:], " "), tz); timeErr != nil && i != len(data.Args)-1 {
 				return shared.CommandResponse{
 					ChannelID: data.ChannelID,
 					Error: shared.CommandError{
