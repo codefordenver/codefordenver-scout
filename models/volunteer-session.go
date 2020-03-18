@@ -6,7 +6,7 @@ import (
 )
 
 type VolunteerSession struct {
-	ID            int `gorm:"AUTO_INCREMENT"`
+	ID            int `gorm:"primary_key;AUTO_INCREMENT"`
 	BrigadeID     int `gorm:"not null"`
 	Brigade       Brigade
 	DiscordUserID string `gorm:"not null"`
