@@ -74,6 +74,7 @@ func getChannelBrigade(channel *discordgo.Channel) *models.Brigade {
 }
 
 func getProject(name string, brigadeID int) *models.Project {
+	name = strings.ToLower(name)
 	var project models.Project
 	if err := db.Find(&project, "brigade_id = ? and name = ?", brigadeID, name).Error; err != nil {
 		fmt.Println(err)
@@ -119,6 +120,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 					cmdData.BrigadeArg = cmdData.Args[len(cmdData.Args)-2]
 					cmdData.Args = append(cmdData.Args[:len(cmdData.Args)-2], cmdData.Args[len(cmdData.Args)-1]) // Remove brigade from argument list for command execution
 					var project *models.Project
+					fmt.Println(brigade.ID)
 					if project = getProject(cmdData.Args[len(cmdData.Args)-1], brigade.ID); project != nil { // If last argument is a project name
 						cmdData.Project = project
 						cmdData.ProjectArg = cmdData.Args[len(cmdData.Args)-1]
@@ -369,7 +371,7 @@ func New(dbConnection *gorm.DB) (*discordgo.Session, error) {
 		ExecutionContext: shared.ContextBrigade,
 		Permission:       shared.PermissionMember,
 		MinArgs:          0,
-		MaxArgs:          1,
+		MaxArgs:          -1,
 	}
 	cmdHandler.RegisterCommand(checkInCommand)
 
@@ -528,9 +530,9 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if channel, err := s.Channel(m.ChannelID); err != nil {
 			fmt.Println("error fetching guild channel,", err)
 		} else if channel.Type == discordgo.ChannelTypeGuildText {
-			if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
+			/*if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
 				fmt.Println("error deleting channel message,", err)
-			}
+			}*/
 		}
 		commandText := strings.TrimPrefix(m.Content, "!")
 		if commandText == m.Content {
@@ -940,6 +942,7 @@ func checkIn(data shared.CommandData) shared.CommandResponse {
 			},
 		}
 	} else {
+		inTime = time.Now()
 		return startSession(data, inTime)
 	}
 }
