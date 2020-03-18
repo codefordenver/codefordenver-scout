@@ -530,9 +530,9 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if channel, err := s.Channel(m.ChannelID); err != nil {
 			fmt.Println("error fetching guild channel,", err)
 		} else if channel.Type == discordgo.ChannelTypeGuildText {
-			/*if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
+			if err := s.ChannelMessageDelete(m.ChannelID, m.ID); err != nil {
 				fmt.Println("error deleting channel message,", err)
-			}*/
+			}
 		}
 		commandText := strings.TrimPrefix(m.Content, "!")
 		if commandText == m.Content {
