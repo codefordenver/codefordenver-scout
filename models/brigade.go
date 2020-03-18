@@ -1,12 +1,9 @@
 package models
 
-import "github.com/jinzhu/gorm"
-
 type Brigade struct {
 	// Discord config
-	gorm.Model
 	ID                        int    `gorm:"primary_key;AUTO_INCREMENT"`
-	Name                      string `gorm:"not null; unique"`
+	Name                      string `gorm:"not null;unique"`
 	DisplayName               string `gorm:"not null;unique"`
 	GuildID                   string `gorm:"not null;unique"`
 	ActiveProjectCategoryID   string `gorm:"not null;unique"`
