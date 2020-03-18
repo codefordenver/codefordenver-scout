@@ -257,7 +257,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 			return nil
 		}
 	} else {
-		if _, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Unrecognized command, %v", key)); err != nil {
+		if _, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Unrecognized command, **%v**", key)); err != nil {
 			fmt.Println("error sending channel message,", err)
 			return err
 		}
@@ -384,12 +384,12 @@ func New(dbConnection *gorm.DB) (*discordgo.Session, error) {
 	cmdHandler.RegisterCommand(checkOutCommand)
 
 	getTimeCommand := Command{
-		Keyword:          "time",
-		Handler:          getTime,
-		ExecutionContext: shared.ContextAny,
-		Permission:       shared.PermissionEveryone,
-		MinArgs:          0,
-		MaxArgs:          0,
+		Keyword:           "time",
+		Handler:           getTime,
+		ContextHandler:    getTimeContexts,
+		PermissionHandler: getTimePermissions,
+		MinArgs:           0,
+		MaxArgs:           1,
 	}
 	cmdHandler.RegisterCommand(getTimeCommand)
 
@@ -1154,39 +1154,40 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 	}
 	return shared.CommandResponse{
 		ChannelID: data.ChannelID,
-		Success:   "Ended <@!" + data.Author.ID + ">'s volunteering session, which lasted `" + time.Duration(session.Duration.Int64).Round(time.Second).String() + "`",
+		Success:   "Ended <@!" + data.Author.ID + ">'s volunteering session, which lasted **" + time.Duration(session.Duration.Int64).Round(time.Second).String() + "**",
 	}
 }
 
-/*func getTimePermissions(args []string) shared.Permission {
-
+func getTimePermissions(args []string) shared.Permission {
+	if len(args) > 0 {
+		return shared.PermissionAdmin
+	}
+	return shared.PermissionEveryone
 }
 
-func geTimeContexts(args []string) shared.ExecutionContext {
-
-}*/
+func getTimeContexts(args []string) shared.ExecutionContext {
+	if len(args) > 0 {
+		return shared.ContextBrigade
+	}
+	return shared.ContextAny
+}
 
 func getTime(data shared.CommandData) shared.CommandResponse {
-	var totalTimeNano int
+	var initialSessionSet *gorm.DB
+	var dataFor string
 	if data.ProjectArg != "" {
-		if err := db.Model(models.VolunteerSession{}).Select("sum(duration)").Where("brigade_id = ? and project_id = ?", data.Brigade.ID, data.Project.ID).Row().Scan(&totalTimeNano); err != nil {
-			fmt.Println("error summing durations", err)
+		if initialSessionSet = db.Model(models.VolunteerSession{}).Where("brigade_id = ? and project_id = ?", data.Brigade.ID, data.Project.ID); initialSessionSet.Error != nil {
 			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
 				Error: shared.CommandError{
 					ErrorType:   shared.ExecutionError,
 					ErrorString: "Failed to fetch volunteering sessions",
 				},
-			}
-		} else {
-			return shared.CommandResponse{
-				ChannelID: data.ChannelID,
-				Success:   fmt.Sprintf("Total time: %v", time.Duration(totalTimeNano)),
 			}
 		}
+		dataFor = "**" + data.Brigade.DisplayName + "**'s **" + data.ProjectArg + "** project"
 	} else if data.BrigadeArg != "" {
-		if err := db.Model(models.VolunteerSession{}).Select("sum(duration)").Where("brigade_id = ?", data.Brigade.ID).Row().Scan(&totalTimeNano); err != nil {
-			fmt.Println("error summing durations", err)
+		if initialSessionSet = db.Model(models.VolunteerSession{}).Where("brigade_id = ?", data.Brigade.ID); initialSessionSet.Error != nil {
 			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
 				Error: shared.CommandError{
@@ -1194,27 +1195,129 @@ func getTime(data shared.CommandData) shared.CommandResponse {
 					ErrorString: "Failed to fetch volunteering sessions",
 				},
 			}
+		}
+		dataFor = "**" + data.Brigade.Name + "**"
+	} else {
+		dataFor = "<@!" + data.Author.ID + ">"
+		if initialSessionSet = db.Model(models.VolunteerSession{}).Where("discord_user_id = ?", data.Author.ID); initialSessionSet.Error != nil {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch volunteering sessions",
+				},
+			}
+		}
+	}
+	if len(data.Args) == 1 {
+		if data.Args[0] == "projects" {
+			if rows, err := initialSessionSet.Select("project_id, sum(duration)").Group("project_id").Rows(); err != nil {
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Error: shared.CommandError{
+						ErrorType:   shared.ExecutionError,
+						ErrorString: "Failed to fetch brigade's volunteer sessions by project. Try again later.",
+					},
+				}
+			} else {
+				successes := make([]string, 0)
+				successes = append(successes, "Total time for " + dataFor + " by project:")
+				groupingErrors := make([]string, 0)
+				var projectID sql.NullInt64
+				var totalTimeNano int
+				for rows.Next() {
+					if err := rows.Scan(&projectID, &totalTimeNano); err != nil {
+						return shared.CommandResponse{
+							ChannelID: data.ChannelID,
+							Error: shared.CommandError{
+								ErrorType:   shared.ExecutionError,
+								ErrorString: "Failed to group volunteer sessions by project. Try again later.",
+							},
+						}
+					}
+					if projectID.Valid {
+						var project models.Project
+						if err := db.Find(&project, "id = ?", projectID.Int64).Error; err != nil {
+							groupingErrors = append(groupingErrors, fmt.Sprintf("Failed to find project with ID **%v**.", projectID.Int64))
+						} else {
+							successes = append(successes, fmt.Sprintf("%v: **%v**", project.Name, time.Duration(totalTimeNano)))
+						}
+					} else {
+						successes = append(successes, fmt.Sprintf("No project: **%v**", time.Duration(totalTimeNano)))
+					}
+				}
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Success:   strings.Join(successes, "\n"),
+					Error: shared.CommandError{
+						ErrorType:   shared.ExecutionError,
+						ErrorString: strings.Join(groupingErrors, "\n"),
+					},
+				}
+			}
+		} else if data.Args[0] == "users" {
+			if rows, err := initialSessionSet.Select("discord_user_id, sum(duration)").Group("discord_user_id").Rows(); err != nil {
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Error: shared.CommandError{
+						ErrorType:   shared.ExecutionError,
+						ErrorString: "Failed to fetch brigade's volunteer sessions by user. Try again later.",
+					},
+				}
+			} else {
+				successes := make([]string, 0)
+				successes = append(successes, "Total time for " + dataFor + " by user:")
+				groupingErrors := make([]string, 0)
+				var discordUserID string
+				var totalTimeNano int
+				for rows.Next() {
+					if err := rows.Scan(&discordUserID, &totalTimeNano); err != nil {
+						return shared.CommandResponse{
+							ChannelID: data.ChannelID,
+							Error: shared.CommandError{
+								ErrorType:   shared.ExecutionError,
+								ErrorString: "Failed to group volunteer sessions by user. Try again later.",
+							},
+						}
+					}
+					if _, err := data.Session.User(discordUserID); err != nil {
+						groupingErrors = append(groupingErrors, "Failed to find user <@!"+discordUserID+">. Try again later.")
+					} else {
+						successes = append(successes, fmt.Sprintf("<@!%v>: **%v**", discordUserID, time.Duration(totalTimeNano)))
+					}
+				}
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Success:   strings.Join(successes, "\n"),
+					Error: shared.CommandError{
+						ErrorType:   shared.ExecutionError,
+						ErrorString: strings.Join(groupingErrors, "\n"),
+					},
+				}
+			}
 		} else {
 			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
-				Success:   fmt.Sprintf("Total time: %v", time.Duration(totalTimeNano)),
+				Error: shared.CommandError{
+					ErrorType:   shared.ArgumentError,
+					ErrorString: "Invalid category to sort by provided. Try `projects` or `users`.",
+				},
 			}
 		}
 	} else {
-		if err := db.Model(models.VolunteerSession{}).Select("sum(duration)").Where("discord_user_id = ?", data.Author.ID).Row().Scan(&totalTimeNano); err != nil {
-			fmt.Println("error summing durations", err)
+		var totalTimeNano int
+		if err := initialSessionSet.Select("sum(duration)").Row().Scan(&totalTimeNano); err != nil {
 			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
-				Error: shared.CommandError{
+				Error:     shared.CommandError{
 					ErrorType:   shared.ExecutionError,
-					ErrorString: "Failed to fetch volunteering sessions",
+					ErrorString: "Failed to fetch volunteer sessions. Try again later.",
 				},
 			}
-		} else {
-			return shared.CommandResponse{
-				ChannelID: data.ChannelID,
-				Success:   fmt.Sprintf("Total time: %v", time.Duration(totalTimeNano)),
-			}
+		}
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   fmt.Sprintf("Total time for %v: **%v**", dataFor, totalTimeNano),
 		}
 	}
 }
