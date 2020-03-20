@@ -47,7 +47,7 @@ func handleResponse(s *discordgo.Session, r shared.CommandResponse) {
 	}
 	if r.Error.ErrorString != "" {
 		if r.Error.ErrorType == shared.ArgumentError {
-			r.Error.ErrorString += " If you attempted to specify a brigade or project, ensure it was sent without spaces in the name."
+			r.Error.ErrorString += " If you attempted to specify a brigade or project, ensure it was spelled correctly."
 		}
 		if _, err := s.ChannelMessageSend(r.ChannelID, r.Error.ErrorString); err != nil {
 			fmt.Println("Failed to send response from command to channel")
@@ -201,11 +201,11 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 
 			if len(cmdData.Args) < command.MinArgs || (command.MaxArgs != -1 && len(cmdData.Args) > command.MaxArgs) { // Check if # of arguments is adequate
 				if command.MinArgs == command.MaxArgs {
-					if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+". If you attempted to specify a brigade or project, ensure it was sent without spaces in the name."); err != nil {
+					if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+". If you attempted to specify a brigade or project, ensure it was spelled correctly."); err != nil {
 						return err
 					}
 				} else {
-					if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)+". If you attempted to specify a brigade or project, ensure it was sent without spaces in the name."); err != nil {
+					if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)+". If you attempted to specify a brigade or project, ensure it was spelled correctly."); err != nil {
 						return err
 					}
 				}
