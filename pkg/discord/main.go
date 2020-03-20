@@ -909,8 +909,9 @@ func parseTime(timeStr string, location *time.Location) (time.Time, error) {
 		}
 		var outTime time.Time
 		var err error
+		var t time.Time
 		for i, format := range formats {
-			if t, err := time.Parse(format, timeStr); err == nil {
+			if t, err = time.Parse(format, timeStr); err == nil {
 				if i <= 3 {
 					outTime = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), location)
 				} else {
@@ -923,6 +924,17 @@ func parseTime(timeStr string, location *time.Location) (time.Time, error) {
 	} else {
 		return time.Time{}, errors.New("failed to parse provided time")
 	}
+}
+
+// Format duration with spaces
+func fmtDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+	return fmt.Sprintf("%1dh %1dm %1ds", h, m, s)
 }
 
 func checkIn(data shared.CommandData) shared.CommandResponse {
@@ -942,7 +954,6 @@ func checkIn(data shared.CommandData) shared.CommandResponse {
 			},
 		}
 	} else {
-		inTime = time.Now()
 		return startSession(data, inTime)
 	}
 }
@@ -1157,7 +1168,7 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 	}
 	return shared.CommandResponse{
 		ChannelID: data.ChannelID,
-		Success:   "Ended <@!" + data.Author.ID + ">'s volunteering session, which lasted **" + time.Duration(session.Duration.Int64).Round(time.Second).String() + "**",
+		Success:   "Ended <@!" + data.Author.ID + ">'s volunteering session, which lasted **" + fmtDuration(time.Duration(session.Duration.Int64)) + "**",
 	}
 }
 
@@ -1243,10 +1254,10 @@ func getTime(data shared.CommandData) shared.CommandResponse {
 						if err := db.Find(&project, "id = ?", projectID.Int64).Error; err != nil {
 							groupingErrors = append(groupingErrors, fmt.Sprintf("Failed to find project with ID **%v**.", projectID.Int64))
 						} else {
-							successes = append(successes, fmt.Sprintf("%v: **%v**", project.Name, time.Duration(totalTimeNano)))
+							successes = append(successes, fmt.Sprintf("%v: **%v**", project.Name, fmtDuration(time.Duration(totalTimeNano))))
 						}
 					} else {
-						successes = append(successes, fmt.Sprintf("No project: **%v**", time.Duration(totalTimeNano)))
+						successes = append(successes, fmt.Sprintf("No project: **%v**", fmtDuration(time.Duration(totalTimeNano))))
 					}
 				}
 				return shared.CommandResponse{
@@ -1286,7 +1297,7 @@ func getTime(data shared.CommandData) shared.CommandResponse {
 					if _, err := data.Session.User(discordUserID); err != nil {
 						groupingErrors = append(groupingErrors, "Failed to find user <@!"+discordUserID+">. Try again later.")
 					} else {
-						successes = append(successes, fmt.Sprintf("<@!%v>: **%v**", discordUserID, time.Duration(totalTimeNano)))
+						successes = append(successes, fmt.Sprintf("<@!%v>: **%v**", discordUserID, fmtDuration(time.Duration(totalTimeNano))))
 					}
 				}
 				return shared.CommandResponse{
@@ -1320,7 +1331,7 @@ func getTime(data shared.CommandData) shared.CommandResponse {
 		}
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
-			Success:   fmt.Sprintf("Total time for %v: **%v**", dataFor, totalTimeNano),
+			Success:   fmt.Sprintf("Total time for %v: **%v**", dataFor, fmtDuration(time.Duration(totalTimeNano))),
 		}
 	}
 }
