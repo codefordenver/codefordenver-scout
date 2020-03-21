@@ -168,12 +168,11 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 				}
 			}
 
-			var context shared.ExecutionContext
-			if command.ContextHandler == nil {
-				context = command.ExecutionContext
-			} else {
+			context := command.ExecutionContext
+			if command.ContextHandler != nil { // If the command has a context handler, use that instead
 				context = command.ContextHandler(cmdData.Args)
 			}
+
 
 			switch context { // Check command execution environment, send error if the execution environment is not valid
 			case shared.ContextDM:
@@ -212,10 +211,8 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 				return nil
 			}
 
-			var permission shared.Permission
-			if command.PermissionHandler == nil {
-				permission = command.Permission
-			} else {
+			permission := command.Permission
+			if command.PermissionHandler != nil {
 				permission = command.PermissionHandler(cmdData.Args)
 			}
 
