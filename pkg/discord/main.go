@@ -93,7 +93,8 @@ func getChannelProject(channel *discordgo.Channel) *models.Project {
 }
 
 // Dispatch a command, checking permissions first
-func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *discordgo.MessageCreate) error {
+func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Session, m *discordgo.MessageCreate) error {
+	args := strings.Fields(commandString)
 	key := args[0]
 	if len(args) > 1 {
 		args = args[1:]
@@ -113,102 +114,87 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 		if channel, err := s.Channel(cmdData.ChannelID); err != nil {
 			return err
 		} else {
-			// Populate command brigade & project based on either arguments provided or where the command was run from
-			if len(cmdData.Args) >= command.MinArgs+2 {
-				if brigade := getBrigade(cmdData.Args[len(cmdData.Args)-2]); brigade != nil { // If second to last argument is a brigade name
-					cmdData.Brigade = brigade
-					cmdData.BrigadeArg = cmdData.Args[len(cmdData.Args)-2]
-					cmdData.Args = append(cmdData.Args[:len(cmdData.Args)-2], cmdData.Args[len(cmdData.Args)-1]) // Remove brigade from argument list for command execution
-					var project *models.Project
-					fmt.Println(brigade.ID)
-					if project = getProject(cmdData.Args[len(cmdData.Args)-1], brigade.ID); project != nil { // If last argument is a project name
-						cmdData.Project = project
-						cmdData.ProjectArg = cmdData.Args[len(cmdData.Args)-1]
-						cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove project from argument list for command execution
-					} else if project := getChannelProject(channel); project != nil { // If command was run from a project channel
-						cmdData.Project = project
-					}
-				} else if brigade := getBrigade(cmdData.Args[len(cmdData.Args)-1]); brigade != nil { // If last argument is a brigade name
-					cmdData.Brigade = brigade
-					cmdData.BrigadeArg = cmdData.Args[len(cmdData.Args)-1]
-					cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove brigade from argument list for command execution
-				} else if brigade := getChannelBrigade(channel); brigade != nil { // If command was run from a brigade channel, and no brigade argument was provided
-					cmdData.Brigade = brigade
-					var project *models.Project
-					if project = getProject(cmdData.Args[len(cmdData.Args)-1], brigade.ID); project != nil { // If last argument is a project name
-						cmdData.Project = project
-						cmdData.ProjectArg = cmdData.Args[len(cmdData.Args)-1]
-						cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove project from argument list for command execution
-					} else if project := getChannelProject(channel); project != nil { // If command was run from a project channel
-						cmdData.Project = project
-					}
+			start := time.Now()
+			if strings.Count(commandString, "brigade:") > 1 {
+				_, err := s.ChannelMessageSend(m.ChannelID, "You provided more than one `brigade:` argument. Try again with just one, or send the command from a brigade channel.")
+				return err
+			}
+			if strings.Count(commandString, "project:") > 1 {
+				_, err := s.ChannelMessageSend(m.ChannelID, "You provided more than one `project:` argument. Try again with just one, or send the command from a project channel")
+				return err
+			}
+			var brigadeName, projectName string
+			i := 0
+			for _, arg := range cmdData.Args {
+				if trimmedArg := strings.TrimPrefix(arg, "brigade:"); trimmedArg != arg {
+					brigadeName = trimmedArg
+					continue
 				}
-			} else if len(cmdData.Args) >= command.MinArgs+1 {
-				if brigade := getBrigade(cmdData.Args[len(cmdData.Args)-1]); brigade != nil { // If last argument is a brigade name
-					cmdData.Brigade = brigade
-					cmdData.BrigadeArg = cmdData.Args[len(cmdData.Args)-1]
-					cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove brigade from argument list for command execution
-				} else if brigade := getChannelBrigade(channel); brigade != nil { // If command was run from a brigade channel, and no brigade argument was provided
-					cmdData.Brigade = brigade
-					var project *models.Project
-					if project = getProject(cmdData.Args[len(cmdData.Args)-1], brigade.ID); project != nil { // If last argument is a project name
-						cmdData.Project = project
-						cmdData.ProjectArg = cmdData.Args[len(cmdData.Args)-1]
-						cmdData.Args = cmdData.Args[:len(cmdData.Args)-1] // Remove project from argument list for command execution
-					} else if project := getChannelProject(channel); project != nil { // If command was run from a project channel
-						cmdData.Project = project
+				if trimmedArg := strings.TrimPrefix(arg, "project:"); trimmedArg != arg {
+					projectName = trimmedArg
+					continue
+				}
+				cmdData.Args[i] = arg
+				i++
+			}
+			cmdData.Args = cmdData.Args[:i]
+
+			if brigadeName != "" {
+				cmdData.Brigade = getBrigade(brigadeName)
+				cmdData.BrigadeArg = brigadeName
+				if cmdData.Brigade == nil {
+					_, err := s.ChannelMessageSend(m.ChannelID, "Invalid brigade specified. Ensure you spelled the brigade name correctly and without spaces.")
+					return err
+				}
+			} else {
+				cmdData.Brigade = getChannelBrigade(channel)
+			}
+
+			if cmdData.Brigade != nil { // We can only search for a project if we have a brigade
+				if projectName != "" {
+					cmdData.Project = getProject(projectName, cmdData.Brigade.ID)
+					cmdData.ProjectArg = projectName
+					if cmdData.Project == nil {
+						_, err := s.ChannelMessageSend(m.ChannelID, "Invalid project specified. Ensure you spelled the project name correctly and without spaces.")
+						return err
 					}
-				}
-			} else {                                                       // If no arguments were provided, find brigade & project from channel
-				if brigade := getChannelBrigade(channel); brigade != nil { // If command was run from a brigade channel, and no brigade argument was provided
-					cmdData.Brigade = brigade
-				}
-				if project := getChannelProject(channel); project != nil { // If command was run from a project channel, and no project argument was provided
-					cmdData.Project = project
+				} else {
+					cmdData.Project = getChannelProject(channel)
 				}
 			}
+			fmt.Println(time.Now().Sub(start))
 
 			context := command.ExecutionContext
 			if command.ContextHandler != nil { // If the command has a context handler, use that instead
 				context = command.ContextHandler(cmdData.Args)
 			}
 
-
 			switch context { // Check command execution environment, send error if the execution environment is not valid
 			case shared.ContextDM:
 				if channel.Type != discordgo.ChannelTypeDM && channel.Type != discordgo.ChannelTypeGroupDM {
-					if _, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed in a DM with Scout. Please try again."); err != nil {
-						return err
-					}
-					return nil
+					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed in a DM with Scout. Please try again.")
+					return err
 				}
 			case shared.ContextBrigade:
 				if cmdData.Brigade == nil {
-					if _, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a brigade server. Ensure you either ran the command from a brigade server or specified the brigade as an argument."); err != nil {
-						return err
-					}
-					return nil
+					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a brigade channel. Ensure you either ran the command from a brigade channel or specified a `brigade:` argument.")
+					return err
 				}
 			case shared.ContextProject:
 				if cmdData.Project == nil {
-					if _, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a project channel. Ensure you either ran the command from a project server or specified the brigade and project as arguments."); err != nil {
-						return err
-					}
-					return nil
+					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a project channel. Ensure you either ran the command from a project channel or specified a `brigade:` and `project:` argument.")
+					return err
 				}
 			}
 
 			if len(cmdData.Args) < command.MinArgs || (command.MaxArgs != -1 && len(cmdData.Args) > command.MaxArgs) { // Check if # of arguments is adequate
 				if command.MinArgs == command.MaxArgs {
-					if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+". If you attempted to specify a brigade or project, ensure it was spelled correctly."); err != nil {
-						return err
-					}
+					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+". If you attempted to specify a brigade or project, ensure it was spelled correctly.")
+					return err
 				} else {
-					if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)+". If you attempted to specify a brigade or project, ensure it was spelled correctly."); err != nil {
-						return err
-					}
+					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)+". If you attempted to specify a brigade or project, ensure it was spelled correctly.")
+					return err
 				}
-				return nil
 			}
 
 			permission := command.Permission
@@ -256,11 +242,8 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 			return nil
 		}
 	} else {
-		if _, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Unrecognized command, **%v**", key)); err != nil {
-			fmt.Println("error sending channel message,", err)
-			return err
-		}
-		return nil
+		_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Unrecognized command, **%v**", key))
+		return err
 	}
 }
 
@@ -535,8 +518,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if commandText == m.Content {
 			commandText = strings.TrimPrefix(m.Content, fmt.Sprintf("<@%v>", s.State.User.ID))
 		}
-		args := strings.Fields(commandText)
-		err := cmdHandler.DispatchCommand(args, s, m)
+		err := cmdHandler.DispatchCommand(strings.ToLower(commandText), s, m)
 		if err != nil {
 			fmt.Println("error dispatching command", err)
 		}
@@ -1232,7 +1214,7 @@ func getTime(data shared.CommandData) shared.CommandResponse {
 				}
 			} else {
 				successes := make([]string, 0)
-				successes = append(successes, "Total time for " + dataFor + " by project:")
+				successes = append(successes, "Total time for "+dataFor+" by project:")
 				groupingErrors := make([]string, 0)
 				var projectID sql.NullInt64
 				var totalTimeNano int
@@ -1277,7 +1259,7 @@ func getTime(data shared.CommandData) shared.CommandResponse {
 				}
 			} else {
 				successes := make([]string, 0)
-				successes = append(successes, "Total time for " + dataFor + " by user:")
+				successes = append(successes, "Total time for "+dataFor+" by user:")
 				groupingErrors := make([]string, 0)
 				var discordUserID string
 				var totalTimeNano int
@@ -1320,7 +1302,7 @@ func getTime(data shared.CommandData) shared.CommandResponse {
 		if err := initialSessionSet.Select("sum(duration)").Row().Scan(&totalTimeNano); err != nil {
 			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
-				Error:     shared.CommandError{
+				Error: shared.CommandError{
 					ErrorType:   shared.ExecutionError,
 					ErrorString: "Failed to fetch volunteer sessions. Try again later.",
 				},
