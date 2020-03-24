@@ -38,6 +38,7 @@ type CommandHandler struct {
 var cmdHandler CommandHandler
 
 func handleResponse(s *discordgo.Session, r []shared.FunctionResponse) {
+	fmt.Println(r)
 	for _, response := range r {
 		if _, err := s.Channel(response.ChannelID); err != nil {
 			if _, err = s.UserChannelCreate(response.ChannelID); err != nil {
@@ -165,7 +166,7 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 				return err
 			}
 			if channel.Type == discordgo.ChannelTypeGuildText {
-				command.Handler(cmdData)
+				response = command.Handler(cmdData)
 			} else {
 				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
 					return err

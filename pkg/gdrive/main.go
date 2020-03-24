@@ -222,6 +222,13 @@ func FetchAgenda(data shared.CommandData) shared.FunctionResponse {
 				Error:     "Failed to fetch files from Google Drive. Try again later.",
 			}
 		}
+		if len(r.Files) == 0 {
+			fmt.Println("empty or invalid agenda folder")
+			return shared.FunctionResponse{
+				ChannelID: data.ChannelID,
+				Error:     "Found an empty or invalid agenda folder in Google Drive. Check your configuration.",
+			}
+		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
 		agenda, err = client.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
