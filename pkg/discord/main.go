@@ -1,6 +1,8 @@
 package discord
 
 import (
+	"database/sql"
+	"errors"
 	"fmt"
 	"github.com/bwmarrin/discordgo"
 	"github.com/codefordenver/codefordenver-scout/models"
@@ -9,26 +11,21 @@ import (
 	"github.com/codefordenver/codefordenver-scout/pkg/shared"
 	"github.com/jinzhu/gorm"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
-)
-
-type Permission int
-
-const (
-	PermissionAll Permission = iota
-	PermissionAdmin
-	PermissionMember
-	PermissionDM
-	PermissionChannel
+	"time"
 )
 
 type Command struct {
-	Keyword    string
-	Handler    func(shared.CommandData) []shared.FunctionResponse
-	PermissionMap map[int]Permission
-	MinArgs int
-	MaxArgs int
+	Keyword                 string
+	shared.ExecutionContext // Execution context specifies what information is needed by the command. Should be the MINIMUM information. For example, if at least a brigade is required but a project can be specified, use ContextBrigade.
+	ContextHandler          func([]string) shared.ExecutionContext
+	shared.Permission       // Permission should only used in conjunction with brigade or project execution contexts. Otherwise, use PermissionEveryone.
+	PermissionHandler       func([]string) shared.Permission
+	Handler                 func(shared.CommandData) shared.CommandResponse
+	MinArgs                 int
+	MaxArgs                 int
 }
 
 type CommandHandler struct {
@@ -37,38 +34,64 @@ type CommandHandler struct {
 
 var cmdHandler CommandHandler
 
-func handleResponse(s *discordgo.Session, r []shared.FunctionResponse) {
-	fmt.Println(r)
-	for _, response := range r {
-		if _, err := s.Channel(response.ChannelID); err != nil {
-			if _, err = s.UserChannelCreate(response.ChannelID); err != nil {
-				fmt.Println("Failed to create DM channel to send response from command")
-			}
+func handleResponse(s *discordgo.Session, r shared.CommandResponse) {
+	if _, err := s.Channel(r.ChannelID); err != nil {
+		if _, err = s.UserChannelCreate(r.ChannelID); err != nil {
+			fmt.Println("Failed to create DM channel to send response from command")
 		}
-		if response.Success != "" {
-			if _, err := s.ChannelMessageSend(response.ChannelID, response.Success); err != nil {
-				fmt.Println("Failed to send response from command to channel")
-			}
+	}
+	if r.Success != "" {
+		if _, err := s.ChannelMessageSend(r.ChannelID, r.Success); err != nil {
+			fmt.Println("Failed to send response from command to channel")
 		}
-		if response.Error != "" {
-			if _, err := s.ChannelMessageSend(response.ChannelID, response.Error); err != nil {
-				fmt.Println("Failed to send response from command to channel")
-			}
+	}
+	if r.Error.ErrorString != "" {
+		if _, err := s.ChannelMessageSend(r.ChannelID, r.Error.ErrorString); err != nil {
+			fmt.Println("Failed to send response from command to channel")
 		}
 	}
 }
 
-// Dispatch a command, checking permissions first
-func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *discordgo.MessageCreate) error {
+func getBrigade(name string) *models.Brigade {
 	var brigade models.Brigade
-	// Check if guildID exists before fetching brigade for commands executed in DMs
-	if len(m.GuildID) > 0 {
-		err := db.Where("guild_id = ?", m.GuildID).First(&brigade).Error
-		if err != nil {
-			fmt.Println("error fetching brigade,", err)
-			return err
-		}
+	if err := db.Find(&brigade, "name = ?", name).Error; err != nil {
+		fmt.Println(err)
+		return nil
 	}
+	return &brigade
+}
+
+func getChannelBrigade(channel *discordgo.Channel) *models.Brigade {
+	var brigade models.Brigade
+	if err := db.Find(&brigade, "guild_id = ?", channel.GuildID).Error; err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	return &brigade
+}
+
+func getProject(name string, brigadeID int) *models.Project {
+	name = strings.ToLower(name)
+	var project models.Project
+	if err := db.Find(&project, "brigade_id = ? and name = ?", brigadeID, name).Error; err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	return &project
+}
+
+func getChannelProject(channel *discordgo.Channel) *models.Project {
+	var project models.Project
+	if err := db.Find(&project, "discord_channel_id = ? or github_discord_channel_id = ?", channel.ID, channel.ID).Error; err != nil {
+		fmt.Println(err)
+		return nil
+	}
+	return &project
+}
+
+// Dispatch a command, checking permissions first
+func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Session, m *discordgo.MessageCreate) error {
+	args := strings.Fields(commandString)
 	key := args[0]
 	if len(args) > 1 {
 		args = args[1:]
@@ -81,108 +104,144 @@ func (c CommandHandler) DispatchCommand(args []string, s *discordgo.Session, m *
 	}
 	cmdData := shared.CommandData{
 		Session:     s,
-		Brigade:     brigade,
 		MessageData: msgData,
 		Args:        args,
 	}
 	if command, exists := c.Commands[key]; exists {
-		if len(args) < command.MinArgs || (command.MaxArgs != -1 && len(args) > command.MaxArgs) {
-			if command.MinArgs == command.MaxArgs {
-				if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)); err != nil {
+		if channel, err := s.Channel(cmdData.ChannelID); err != nil {
+			return err
+		} else {
+			var brigadeName, projectName string
+			var brigadeState, projectState bool
+			i := 0
+			for _, arg := range cmdData.Args {
+				if arg == "-b" {
+					brigadeState = true
+					continue
+				}
+				if arg == "-p" {
+					projectState = true
+					continue
+				}
+				if brigadeState {
+					brigadeName = strings.ToLower(arg)
+					brigadeState = false
+					continue
+				}
+				if projectState {
+					projectName = strings.ToLower(arg)
+					projectState = false
+					continue
+				}
+				cmdData.Args[i] = arg
+				i++
+			}
+			cmdData.Args = cmdData.Args[:i]
+
+			if brigadeName != "" {
+				cmdData.Brigade = getBrigade(brigadeName)
+				cmdData.BrigadeArg = brigadeName
+				if cmdData.Brigade == nil {
+					_, err := s.ChannelMessageSend(m.ChannelID, "Invalid brigade specified. Ensure you spelled the brigade name correctly and without spaces.")
 					return err
 				}
 			} else {
-				if _, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)); err != nil {
+				cmdData.Brigade = getChannelBrigade(channel)
+			}
+
+			if cmdData.Brigade != nil { // We can only search for a project if we have a brigade
+				if projectName != "" {
+					cmdData.Project = getProject(projectName, cmdData.Brigade.ID)
+					cmdData.ProjectArg = projectName
+					if cmdData.Project == nil {
+						_, err := s.ChannelMessageSend(m.ChannelID, "Invalid project specified. Ensure you spelled the project name correctly and without spaces.")
+						return err
+					}
+				} else {
+					cmdData.Project = getChannelProject(channel)
+				}
+			}
+
+			context := command.ExecutionContext
+			if command.ContextHandler != nil { // If the command has a context handler, use that instead
+				context = command.ContextHandler(cmdData.Args)
+			}
+
+			switch context { // Check command execution environment, send error if the execution environment is not valid
+			case shared.ContextDM:
+				if channel.Type != discordgo.ChannelTypeDM && channel.Type != discordgo.ChannelTypeGroupDM {
+					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed in a DM with Scout. Please try again.")
+					return err
+				}
+			case shared.ContextBrigade:
+				if cmdData.Brigade == nil {
+					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a brigade channel. Ensure you either ran the command from a brigade channel or specified a `brigade:` argument.")
+					return err
+				}
+			case shared.ContextProject:
+				if cmdData.Project == nil {
+					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a project channel. Ensure you either ran the command from a project channel or specified a `brigade:` and `project:` argument.")
 					return err
 				}
 			}
+
+			if len(cmdData.Args) < command.MinArgs || (command.MaxArgs != -1 && len(cmdData.Args) > command.MaxArgs) { // Check if # of arguments is adequate
+				if command.MinArgs == command.MaxArgs {
+					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs) + ".")
+					return err
+				} else {
+					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)+".")
+					return err
+				}
+			}
+
+			permission := command.Permission
+			if command.PermissionHandler != nil {
+				permission = command.PermissionHandler(cmdData.Args)
+			}
+
+			var response shared.CommandResponse
+
+			switch permission {
+			case shared.PermissionAdmin:
+				var channelID string
+				if cmdData.Project != nil { // Check if project was specified
+					channelID = cmdData.Project.DiscordChannelID
+				} else if cmdData.Brigade != nil { // Otherwise check if brigade was specified
+					channelID = cmdData.Brigade.ActiveProjectCategoryID
+				} else {
+					channelID = cmdData.ChannelID
+				}
+				if perm, err := s.UserChannelPermissions(cmdData.Author.ID, channelID); err != nil {
+					return err
+				} else if (perm & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator {
+					response = command.Handler(cmdData)
+				} else {
+					if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+						return err
+					}
+				}
+			case shared.PermissionMember:
+				member, err := s.GuildMember(cmdData.Brigade.GuildID, cmdData.Author.ID)
+				if err != nil {
+					return err
+				}
+				if contains(member.Roles, cmdData.Brigade.MemberRole) {
+					response = command.Handler(cmdData)
+				} else {
+					if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
+						return err
+					}
+				}
+			case shared.PermissionEveryone:
+				response = command.Handler(cmdData)
+			}
+			handleResponse(s, response)
 			return nil
 		}
-		var response []shared.FunctionResponse
-		// Check if Permission Map includes provided number of arguments
-		permission, permissionExists := command.PermissionMap[len(args)]
-		if !permissionExists {
-			// Check if Permission Map includes variable argument option
-			permission, permissionExists = command.PermissionMap[-1]
-		}
-		switch permission {
-		case PermissionAdmin:
-			if channel, err := s.Channel(m.ChannelID); err != nil {
-				return err
-			} else {
-				if channel.Type == discordgo.ChannelTypeGuildText {
-					if perm, err := s.UserChannelPermissions(m.Author.ID, m.ChannelID); err != nil {
-						return err
-					} else if (perm & discordgo.PermissionAdministrator) == discordgo.PermissionAdministrator {
-						response = command.Handler(cmdData)
-					} else {
-						if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
-							return err
-						}
-					}
-				} else {
-					if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
-						return err
-					}
-				}
-			}
-		case PermissionMember:
-			if channel, err := s.Channel(m.ChannelID); err != nil {
-				return err
-			} else {
-				if channel.Type == discordgo.ChannelTypeGuildText {
-					member, err := s.GuildMember(m.GuildID, m.Author.ID)
-					if err != nil {
-						return err
-					}
-					if contains(member.Roles, brigade.MemberRole) {
-						response = command.Handler(cmdData)
-					} else {
-						if _, err = s.ChannelMessageSend(m.ChannelID, "You do not have permission to execute this command"); err != nil {
-							return err
-						}
-					}
-				} else {
-					if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
-						return err
-					}
-				}
-			}
-		case PermissionDM:
-			channel, err := s.Channel(m.ChannelID)
-			if err != nil {
-				return err
-			}
-			if channel.Type == discordgo.ChannelTypeDM || channel.Type == discordgo.ChannelTypeGroupDM {
-				response = command.Handler(cmdData)
-			} else {
-				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a DM"); err != nil {
-					return err
-				}
-			}
-		case PermissionChannel:
-			channel, err := s.Channel(m.ChannelID)
-			if err != nil {
-				return err
-			}
-			if channel.Type == discordgo.ChannelTypeGuildText {
-				response = command.Handler(cmdData)
-			} else {
-				if _, err = s.ChannelMessageSend(m.ChannelID, "This command is only accessible from a server text channel"); err != nil {
-					return err
-				}
-			}
-		case PermissionAll:
-			response = command.Handler(cmdData)
-		}
-		handleResponse(s, response)
-		return nil
 	} else {
-		if _, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Unrecognized command, %v", key)); err != nil {
-			fmt.Println("error sending channel message,", err)
-			return err
-		}
-		return nil
+		_, err := s.ChannelMessageSend(m.ChannelID, fmt.Sprintf("Unrecognized command, **%v**", key))
+		return err
 	}
 }
 
@@ -204,125 +263,143 @@ func New(dbConnection *gorm.DB) (*discordgo.Session, error) {
 
 	cmdHandler.Commands = make(map[string]Command)
 
-	permissions := make(map[int]Permission)
-	permissions[0] = PermissionMember
 	onboardCommand := Command{
-		Keyword:    "onboard",
-		Handler:    onboard,
-		PermissionMap: permissions,
-		MinArgs: 0,
-		MaxArgs: 0,
+		Keyword:          "onboard",
+		Handler:          onboard,
+		ExecutionContext: shared.ContextBrigade,
+		Permission:       shared.PermissionMember,
+		MinArgs:          0,
+		MaxArgs:          0,
 	}
 	cmdHandler.RegisterCommand(onboardCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[0] = PermissionMember
 	onboardAllCommand := Command{
-		Keyword:    "onboardall",
-		Handler:    onboardAll,
-		PermissionMap: permissions,
-		MinArgs: 0,
-		MaxArgs: 0,
+		Keyword:          "onboardall",
+		Handler:          onboardAll,
+		ExecutionContext: shared.ContextBrigade,
+		Permission:       shared.PermissionMember,
+		MinArgs:          0,
+		MaxArgs:          0,
 	}
 	cmdHandler.RegisterCommand(onboardAllCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[0] = PermissionChannel
 	getAgendaCommand := Command{
-		Keyword:    "agenda",
-		Handler:    getAgenda,
-		PermissionMap: permissions,
-		MinArgs: 0,
-		MaxArgs: 0,
+		Keyword:          "agenda",
+		Handler:          getAgenda,
+		ExecutionContext: shared.ContextBrigade,
+		Permission:       shared.PermissionMember,
+		MinArgs:          0,
+		MaxArgs:          0,
 	}
 	cmdHandler.RegisterCommand(getAgendaCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[1] = PermissionMember
 	joinCommand := Command{
-		Keyword:    "join",
-		Handler:    joinProject,
-		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		Keyword:          "join",
+		Handler:          joinProject,
+		ExecutionContext: shared.ContextProject,
+		Permission:       shared.PermissionMember,
+		MinArgs:          1,
+		MaxArgs:          1,
 	}
 	cmdHandler.RegisterCommand(joinCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[1] = PermissionMember
 	leaveCommand := Command{
-		Keyword:    "leave",
-		Handler:    leaveProject,
-		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		Keyword:          "leave",
+		Handler:          leaveProject,
+		ExecutionContext: shared.ContextProject,
+		Permission:       shared.PermissionMember,
+		MinArgs:          1,
+		MaxArgs:          1,
 	}
 	cmdHandler.RegisterCommand(leaveCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[2] = PermissionAdmin
 	trackCommand := Command{
-		Keyword:    "track",
-		Handler:    trackFile,
-		PermissionMap: permissions,
-		MinArgs: 2,
-		MaxArgs: 2,
+		Keyword:          "track",
+		Handler:          trackFile,
+		ExecutionContext: shared.ContextBrigade,
+		Permission:       shared.PermissionAdmin,
+		MinArgs:          2,
+		MaxArgs:          2,
 	}
 	cmdHandler.RegisterCommand(trackCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[1] = PermissionAdmin
 	untrackCommand := Command{
-		Keyword:    "untrack",
-		Handler:    untrackFile,
-		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		Keyword:          "untrack",
+		Handler:          untrackFile,
+		ExecutionContext: shared.ContextBrigade,
+		Permission:       shared.PermissionAdmin,
+		MinArgs:          1,
+		MaxArgs:          1,
 	}
 	cmdHandler.RegisterCommand(untrackCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[1] = PermissionMember
 	fetchFileCommand := Command{
-		Keyword:    "fetch",
-		Handler:    fetchFileDispatch,
-		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		Keyword:          "fetch",
+		Handler:          fetchFileDispatch,
+		ExecutionContext: shared.ContextBrigade,
+		Permission:       shared.PermissionMember,
+		MinArgs:          1,
+		MaxArgs:          1,
 	}
 	cmdHandler.RegisterCommand(fetchFileCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[1] = PermissionAdmin
+	checkInCommand := Command{
+		Keyword:          "in",
+		Handler:          checkIn,
+		ExecutionContext: shared.ContextBrigade,
+		Permission:       shared.PermissionMember,
+		MinArgs:          0,
+		MaxArgs:          -1,
+	}
+	cmdHandler.RegisterCommand(checkInCommand)
+
+	checkOutCommand := Command{
+		Keyword:           "out",
+		Handler:           checkOut,
+		ContextHandler:    checkOutContexts,
+		PermissionHandler: checkOutPermissions,
+		MinArgs:           0,
+		MaxArgs:           -1,
+	}
+	cmdHandler.RegisterCommand(checkOutCommand)
+
+	getTimeCommand := Command{
+		Keyword:           "time",
+		Handler:           getTime,
+		ContextHandler:    getTimeContexts,
+		PermissionHandler: getTimePermissions,
+		MinArgs:           0,
+		MaxArgs:           1,
+	}
+	cmdHandler.RegisterCommand(getTimeCommand)
+
 	maintainProjectCommand := Command{
-		Keyword:    "maintain",
-		Handler:    maintainProject,
-		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		Keyword:          "maintain",
+		Handler:          maintainProject,
+		ExecutionContext: shared.ContextProject,
+		Permission:       shared.PermissionAdmin,
+		MinArgs:          1,
+		MaxArgs:          1,
 	}
 	cmdHandler.RegisterCommand(maintainProjectCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[2] = PermissionAdmin
-	permissions[-1] = PermissionAdmin
 	championsCommand := Command{
-		Keyword:    "champion",
-		Handler:    setChampions,
-		PermissionMap: permissions,
-		MinArgs: 2,
-		MaxArgs: -1,
+		Keyword:          "champion",
+		Handler:          setChampions,
+		ExecutionContext: shared.ContextProject,
+		Permission:       shared.PermissionAdmin,
+		MinArgs:          1,
+		MaxArgs:          -1,
 	}
 	cmdHandler.RegisterCommand(championsCommand)
 
-	permissions = make(map[int]Permission)
-	permissions[1] = PermissionDM
 	githubCommand := Command{
-		Keyword:    "github",
-		Handler:    sendGithubUsername,
-		PermissionMap: permissions,
-		MinArgs: 1,
-		MaxArgs: 1,
+		Keyword:          "github",
+		Handler:          sendGithubUsername,
+		ExecutionContext: shared.ContextAny,
+		Permission:       shared.PermissionEveryone,
+		MinArgs:          1,
+		MaxArgs:          1,
 	}
 	cmdHandler.RegisterCommand(githubCommand)
 
@@ -439,8 +516,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if commandText == m.Content {
 			commandText = strings.TrimPrefix(m.Content, fmt.Sprintf("<@%v>", s.State.User.ID))
 		}
-		args := strings.Fields(commandText)
-		err := cmdHandler.DispatchCommand(args, s, m)
+		err := cmdHandler.DispatchCommand(commandText, s, m)
 		if err != nil {
 			fmt.Println("error dispatching command", err)
 		}
@@ -448,40 +524,40 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 }
 
 // Onboard members with the onboarding role.
-func onboard(data shared.CommandData) []shared.FunctionResponse {
+func onboard(data shared.CommandData) shared.CommandResponse {
 	return onboardGroup(data, data.Brigade.OnboardingRole)
 }
 
 // Onboard members with the onboarding or new member role.
-func onboardAll(data shared.CommandData) []shared.FunctionResponse {
+func onboardAll(data shared.CommandData) shared.CommandResponse {
 	return onboardGroup(data, data.Brigade.OnboardingRole, data.Brigade.NewUserRole)
 }
 
 // Give users with the onboarding and/or new member role the full member role
-func onboardGroup(data shared.CommandData, r ...string) []shared.FunctionResponse {
-	guildID := data.GuildID
-	guild, err := data.Session.Guild(guildID)
+func onboardGroup(data shared.CommandData, r ...string) shared.CommandResponse {
+	guild, err := data.Session.Guild(data.Brigade.GuildID)
 	if err != nil {
 		fmt.Println("error fetching guild,", err)
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to get Discord server for onboarding. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to get Discord server for onboarding. Try again later.",
 			},
 		}
 	}
-	var errors string
+	var onboardingErrors string
 	onboardedUsers := make([]*discordgo.User, 0)
 	for _, member := range guild.Members {
 		for _, role := range r {
 			if contains(member.Roles, role) {
-				if err = data.Session.GuildMemberRoleRemove(guildID, member.User.ID, role); err != nil {
+				if err = data.Session.GuildMemberRoleRemove(data.Brigade.GuildID, member.User.ID, role); err != nil {
 					fmt.Println("error removing guild role,", err)
-					errors += "\nFailed to remove **" + role + "** role from " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to remove it manually."
+					onboardingErrors += "\nFailed to remove **" + role + "** role from " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to remove it manually."
 				}
-				if err = data.Session.GuildMemberRoleAdd(guildID, member.User.ID, data.Brigade.MemberRole); err != nil {
+				if err = data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, member.User.ID, data.Brigade.MemberRole); err != nil {
 					fmt.Println("error adding guild role,", err)
-					errors += "\nFailed to add **" + role + "** role to " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to add it manually."
+					onboardingErrors += "\nFailed to add **" + role + "** role to " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to add it manually."
 				}
 				onboardedUsers = append(onboardedUsers, member.User)
 				break
@@ -512,156 +588,171 @@ func onboardGroup(data shared.CommandData, r ...string) []shared.FunctionRespons
 	} else {
 		confirmMessageContent = "No users to onboard"
 	}
-	return []shared.FunctionResponse{
-		{
-			ChannelID: data.ChannelID,
-			Success:   confirmMessageContent,
-			Error:     errors,
+	return shared.CommandResponse{
+		ChannelID: data.ChannelID,
+		Success:   confirmMessageContent,
+		Error: shared.CommandError{
+			ErrorType:   shared.ExecutionError,
+			ErrorString: onboardingErrors,
 		},
 	}
 }
 
 // Return a link to the agenda for the next meeting
-func getAgenda(data shared.CommandData) []shared.FunctionResponse {
-	return []shared.FunctionResponse{
-		gdrive.FetchAgenda(data),
-	}
+func getAgenda(data shared.CommandData) shared.CommandResponse {
+	return gdrive.FetchAgenda(data)
 }
 
 // Add user to project
-func joinProject(data shared.CommandData) []shared.FunctionResponse {
-	projectName := data.Args[0]
-	if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
+func joinProject(data shared.CommandData) shared.CommandResponse {
+	if roles, err := data.Session.GuildRoles(data.Brigade.GuildID); err != nil {
 		fmt.Println("error fetching guild roles,", err)
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to get Discord roles to add you to project. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to get Discord roles to add you to project. Try again later.",
 			},
 		}
 	} else {
 		for _, role := range roles {
-			if strings.ToLower(role.Name) == strings.ToLower(projectName) {
-				if err := data.Session.GuildMemberRoleAdd(data.GuildID, data.Author.ID, role.ID); err != nil {
+			if strings.ToLower(role.Name) == strings.ToLower(data.Project.Name) {
+				if err := data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, data.Author.ID, role.ID); err != nil {
 					fmt.Println("error adding guild role,", err)
-					return []shared.FunctionResponse{
-						{
-							ChannelID: data.ChannelID,
-							Error:     "Failed to add **" + role.Name + "** role to " + data.Author.Username + ". Have an administrator add it manually.",
+					return shared.CommandResponse{
+						ChannelID: data.ChannelID,
+						Error: shared.CommandError{
+							ErrorType:   shared.ExecutionError,
+							ErrorString: "Failed to add **" + role.Name + "** role to " + data.Author.Username + ". Have an administrator add it manually.",
 						},
 					}
 				}
 			}
 		}
-		github.AddUserToTeamWaitlist(data.Author.ID, data.Brigade.GithubOrganization, projectName)
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.Author.ID,
-				Success:   "Trying to add you to the github team for " + projectName + ". Please respond with `!github your-github-username` to be added.",
-			},
+		github.AddUserToTeamWaitlist(data.Author.ID, data.Brigade.GithubOrganization, data.Project.Name)
+		return shared.CommandResponse{
+			ChannelID: data.Author.ID,
+			Success:   "Trying to add you to the github team for " + data.Project.Name + ". Please respond with `!github your-github-username` to be added.",
 		}
 	}
 }
 
 // Remove user from project
-func leaveProject(data shared.CommandData) []shared.FunctionResponse {
-	projectName := data.Args[0]
-	if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
+func leaveProject(data shared.CommandData) shared.CommandResponse {
+	if roles, err := data.Session.GuildRoles(data.Brigade.GuildID); err != nil {
 		fmt.Println("error fetching guild roles,", err)
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to get Discord roles to remove project role. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to get Discord roles to remove project role. Try again later.",
 			},
 		}
 	} else {
 		for _, role := range roles {
-			if strings.HasPrefix(strings.ToLower(role.Name), strings.ToLower(projectName)) {
-				if err := data.Session.GuildMemberRoleRemove(data.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
+			if strings.HasPrefix(strings.ToLower(role.Name), strings.ToLower(data.Project.Name)) {
+				if err := data.Session.GuildMemberRoleRemove(data.Brigade.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
 					fmt.Println("error removing guild role,", err)
-					return []shared.FunctionResponse{
-						{
-							ChannelID: data.ChannelID,
-							Error:     "Failed to remove **" + role.Name + "** role from " + data.Author.Username + ". Have an administrator to remove it manually.",
+					return shared.CommandResponse{
+						ChannelID: data.ChannelID,
+						Error: shared.CommandError{
+							ErrorType:   shared.ExecutionError,
+							ErrorString: "Failed to remove **" + role.Name + "** role from " + data.Author.Username + ". Have an administrator to remove it manually.",
 						},
 					}
 				}
 			}
 		}
 	}
-	return []shared.FunctionResponse{
-		{
-			ChannelID: data.ChannelID,
-			Success:   "You were successfully removed from " + projectName + ".",
-		},
+	return shared.CommandResponse{
+		ChannelID: data.ChannelID,
+		Success:   "You were successfully removed from " + data.Project.Name + ".",
 	}
 }
 
 // Set project champion(s)
-func setChampions(data shared.CommandData) []shared.FunctionResponse {
-	/* brigade := select brigades where guildID matches data.GuildID */
-	projectName := data.Args[0]
-	users := data.Args[1:]
-	responses := make([]shared.FunctionResponse, 0)
+func setChampions(data shared.CommandData) shared.CommandResponse {
+	users := data.Args[0:]
+	var addedChampions []string
+	success := ""
+	championErrors := make([]string, 0)
 	for _, user := range users {
 		userID := strings.TrimSuffix(strings.TrimPrefix(user, "<@"), ">")
-		discordUser, err := data.Session.User(userID)
-		if err != nil {
-			responses = append(responses, shared.FunctionResponse{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to find user " + user + ". Try again later.",
-			})
+		if discordUser, err := data.Session.User(userID); err != nil {
+			championErrors = append(championErrors, "Failed to find user "+user+". Try again later.")
 		} else {
-			if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
+			if roles, err := data.Session.GuildRoles(data.Brigade.GuildID); err != nil {
 				fmt.Println("error fetching guild roles,", err)
-				responses = append(responses, shared.FunctionResponse{
-					ChannelID: data.ChannelID,
-					Error:     "Failed to get Discord roles to add champion role. Try again later.",
-				})
+				championErrors = append(championErrors, "Failed to get Discord roles to add champion role. Try again later.")
 			} else {
+				addedChampions = make([]string, 0)
 				for _, role := range roles {
-					if strings.ToLower(role.Name) == strings.ToLower(projectName)+"-champion" {
-						if err := data.Session.GuildMemberRoleAdd(data.GuildID, discordUser.ID, role.ID); err != nil {
+					if strings.ToLower(role.Name) == strings.ToLower(data.Project.Name)+"-champion" {
+						if err := data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, discordUser.ID, role.ID); err != nil {
 							fmt.Println("error adding guild role,", err)
-							responses = append(responses, shared.FunctionResponse{
-								ChannelID: data.ChannelID,
-								Error:     "Failed to get Discord roles to add champion role. Have an administrator to add it manually.",
-							})
+							championErrors = append(championErrors, "Failed to add champion role to <@!"+userID+">. Have an administrator to add it manually.")
+						} else {
+							addedChampions = append(addedChampions, userID)
 						}
 					}
 				}
 			}
-			github.AddUserToChampionWaitlist(discordUser.ID, data.Brigade.GithubOrganization, projectName)
+			numberAdded := len(addedChampions)
+			if numberAdded > 0 {
+				success = "Successfully onboarded "
+				for i, userID := range addedChampions {
+					if numberAdded > 2 {
+						if i == numberAdded-1 {
+							success += "and <@!" + userID + ">"
+						} else {
+							success += "<@!" + userID + ">, "
+						}
+					} else if numberAdded > 1 {
+						if i == numberAdded-1 {
+							success += " and <@!" + userID + ">"
+						} else {
+							success += "<@!" + userID + ">"
+						}
+					} else {
+						success += "<@!" + userID + ">"
+					}
+				}
+			}
+			github.AddUserToChampionWaitlist(discordUser.ID, data.Brigade.GithubOrganization, data.Project.Name)
 		}
 	}
-	return responses
+	return shared.CommandResponse{
+		ChannelID: data.ChannelID,
+		Success:   success,
+		Error: shared.CommandError{
+			ErrorType:   shared.ExecutionError,
+			ErrorString: strings.Join(championErrors, "\n"),
+		},
+	}
 }
 
 // Send github username to add user to team or set as admin
-func sendGithubUsername(data shared.CommandData) []shared.FunctionResponse {
+func sendGithubUsername(data shared.CommandData) shared.CommandResponse {
 	githubName := data.Args[0]
-	return []shared.FunctionResponse{
-		github.DispatchUsername(data.MessageData, githubName),
-	}
+	return github.DispatchUsername(data.MessageData, githubName)
 }
 
 // Add a file
-func trackFile(data shared.CommandData) []shared.FunctionResponse {
+func trackFile(data shared.CommandData) shared.CommandResponse {
 	fileName := strings.ToLower(data.Args[0])
 	link := data.Args[1]
 	file, err := fetchFile(data)
 	if file != nil {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Success:     "A file with the name **" + fileName + "** is already tracked: " + file.URL,
-			},
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   "A file with the name **" + fileName + "** is already tracked: " + file.URL,
 		}
 	} else if err != nil {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to check if a file with the name **" + fileName + "** is already tracked. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to check if a file with the name **" + fileName + "** is already tracked. Try again later.",
 			},
 		}
 	}
@@ -673,94 +764,85 @@ func trackFile(data shared.CommandData) []shared.FunctionResponse {
 	}
 	if err := db.Create(file).Error; err != nil {
 		fmt.Println("error storing file record,", err)
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to track new file. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to track new file. Try again later.",
 			},
 		}
 	} else {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Success:   "File successfully tracked. Use `!fetch " + fileName + "` to retrieve it, or `!untrack " + fileName + "` to untrack it.",
-			},
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   "File successfully tracked. Use `!fetch " + fileName + "` to retrieve it, or `!untrack " + fileName + "` to untrack it.",
 		}
 	}
 }
 
-func untrackFile(data shared.CommandData) []shared.FunctionResponse {
+func untrackFile(data shared.CommandData) shared.CommandResponse {
 	fileName := strings.ToLower(data.Args[0])
 	file, err := fetchFile(data)
 	if file == nil {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Success:     "No file with the name **" + fileName + "** is tracked.",
-			},
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   "No file with the name **" + fileName + "** is tracked.",
 		}
 	} else if err != nil {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to check if a file with the name **" + fileName + "** is already tracked. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to check if a file with the name **" + fileName + "** is already tracked. Try again later.",
 			},
 		}
 	}
-	/* Delete from Files where FileName matches file.Name and brigade ID matches brigade with data.GuildID */
 	if err = db.Delete(&file).Error; err != nil {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to untrack **" + fileName + "**. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to untrack **" + fileName + "**. Try again later.",
 			},
 		}
 	} else {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Success:   "Successfully untracked **" + fileName + "**.",
-			},
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   "Successfully untracked **" + fileName + "**.",
 		}
 	}
 }
 
 // Handle fetch command
-func fetchFileDispatch(data shared.CommandData) []shared.FunctionResponse {
+func fetchFileDispatch(data shared.CommandData) shared.CommandResponse {
 	file, err := fetchFile(data)
 	var msg string
 	if file != nil {
 		msg = file.URL
 	} else if err != nil {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to fetch file **" + data.Args[0] + "**. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to fetch file **" + data.Args[0] + "**. Try again later.",
 			},
 		}
 	} else {
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Success:     "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it",
-			},
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   "File **" + data.Args[0] + "** not found. Use `!track " + data.Args[0] + " [link]` to track it",
 		}
 	}
-	return []shared.FunctionResponse{
-		{
-			ChannelID: data.ChannelID,
-			Success:   msg,
-		},
+	return shared.CommandResponse{
+		ChannelID: data.ChannelID,
+		Success:   msg,
 	}
 }
 
 // Return a link to requested file
 func fetchFile(data shared.CommandData) (*models.File, error) {
 	fileName := strings.ToLower(data.Args[0])
-	/* file := select all from Files where name matches fileName and brigade ID matches a brigade with data.GuildID*/
 	var files []models.File
-	err := db.Where("name = ? and brigade_id = ?", fileName, data.ID).Find(&files).Error
-	if err != nil {
+	if err := db.Where("name = ? and brigade_id = ?", fileName, data.Brigade.ID).Find(&files).Error; err != nil {
 		fmt.Println("error fetching file,", err)
 		return nil, err
 	}
@@ -772,45 +854,511 @@ func fetchFile(data shared.CommandData) (*models.File, error) {
 	}
 }
 
-// Move project to maintenance
-func maintainProject(data shared.CommandData) []shared.FunctionResponse {
-	projectName := data.Args[0]
-	guild, err := data.Session.Guild(data.GuildID)
-	if err != nil {
-		fmt.Println("error fetching guild,", err)
-		return []shared.FunctionResponse{
-			{
+func isTime(timeStr string) bool {
+	if matches, err := regexp.Match(`^((\d{1,2}|\w{3})([/ ])\d{1,2}[/ ]\d{4})? ?\d{1,2}(:\d{1,2}){1,2}(AM|PM)?$`, []byte(timeStr)); err != nil {
+		return false
+	} else {
+		return matches
+	}
+}
+
+// Check common time formats
+func parseTime(timeStr string, location *time.Location) (time.Time, error) {
+	if isTime(timeStr) {
+		now := time.Now()
+		formats := []string{
+			// Time only
+			"3:04PM",
+			"3:04:05PM",
+			"15:04",
+			"15:04:05",
+			// Date & time
+			"Jan 2 2006 3:04PM",
+			"Jan 2 2006 3:04:05PM",
+			"Jan 2 2006 15:04",
+			"Jan 2 2006 15:04:05",
+			"1/2/2006 3:04PM",
+			"1/2/2006 3:04:05PM",
+			"1/2/2006 15:04",
+			"1/2/2006 15:04:05",
+		}
+		var outTime time.Time
+		var err error
+		var t time.Time
+		for i, format := range formats {
+			if t, err = time.Parse(format, timeStr); err == nil {
+				if i <= 3 {
+					outTime = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), location)
+				} else {
+					outTime = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), location)
+				}
+				return outTime, nil
+			}
+		}
+		return time.Time{}, err
+	} else {
+		return time.Time{}, errors.New("failed to parse provided time")
+	}
+}
+
+// Format duration with spaces
+func fmtDuration(d time.Duration) string {
+	d = d.Round(time.Second)
+	h := d / time.Hour
+	d -= h * time.Hour
+	m := d / time.Minute
+	d -= m * time.Minute
+	s := d / time.Second
+	return fmt.Sprintf("%1dh %1dm %1ds", h, m, s)
+}
+
+func checkIn(data shared.CommandData) shared.CommandResponse {
+	var tz *time.Location
+	var err error
+	if len(data.Args) == 0 {
+		return startSession(data, time.Now())
+	}
+	if tz, err = time.LoadLocation(data.Brigade.TimezoneString); err != nil {
+		tz = time.Local
+	}
+	var inTime time.Time
+	var duration time.Duration
+	var durationErr error
+	timeStr := strings.Join(data.Args[:len(data.Args)], " ")
+	timeStrDuration := strings.Join(data.Args[:len(data.Args) - 1], " ")
+	if !isTime(timeStr) && isTime(timeStrDuration){ // If all the arguments together aren't a time, we try a duration
+		if duration, durationErr = time.ParseDuration(data.Args[len(data.Args)-1]); durationErr == nil {
+			timeStr = timeStrDuration
+		} else {
+			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
-				Error:     "Failed to fetch Discord server for project. Try again later.",
+				Error: shared.CommandError{
+					ErrorType:   shared.ArgumentError,
+					ErrorString: "Failed to parse provided session duration. Try formatting the duration as `1h`",
+				},
+			}
+		}
+	}
+	if inTime, err = parseTime(timeStr, tz); err != nil {
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ArgumentError,
+				ErrorString: "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 2020 3:04PM` if you're starting a session from another day.",
 			},
 		}
 	}
-	var channel, githubChannel *discordgo.Channel
-	for _, ch := range guild.Channels {
-		if strings.ToLower(projectName) == ch.Name {
-			channel = ch
-		} else if strings.ToLower(projectName) == strings.TrimSuffix(ch.Name, "-github") {
-			githubChannel = ch
+	var res shared.CommandResponse
+	res = startSession(data, inTime)
+	if res.Error.ErrorString == "" && timeStr == timeStrDuration { // We have a duration
+		res = endSession(data, inTime.Add(duration))
+	}
+	return res
+}
+
+func startSession(data shared.CommandData, inTime time.Time) shared.CommandResponse {
+	session := models.VolunteerSession{
+		BrigadeID:     data.Brigade.ID,
+		DiscordUserID: data.Author.ID,
+		StartTime:     inTime,
+	}
+	if data.Project != nil {
+		session.ProjectID = sql.NullInt64{
+			Int64: int64(data.Project.ID),
+			Valid: true,
 		}
-		if channel != nil && githubChannel != nil {
-			break
+	} else {
+		session.ProjectID = sql.NullInt64{
+			Int64: 0,
+			Valid: false,
 		}
 	}
+	var count int
+	if db.Model(&models.VolunteerSession{}).Where("discord_user_id = ? and duration is null", data.Author.ID).Count(&count); count > 0 {
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "You already have an active volunteering session. Please end it before starting a new one.",
+			},
+		}
+	}
+	if inTime.After(time.Now()) {
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "You can't start a volunteering session in the future. Try an earlier time.",
+			},
+		}
+	}
+	if err := db.Create(&session).Error; err != nil {
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to start volunteering session. Try again later.",
+			},
+		}
+	}
+	return shared.CommandResponse{
+		ChannelID: data.ChannelID,
+		Success:   "Started a volunteering session for <@!" + data.Author.ID + ">. Use `!out` to end your session.",
+	}
+}
+
+func checkOutContexts(args []string) shared.ExecutionContext {
+	if len(args) > 0 && !isTime(strings.Join(args[0:], " ")) {
+		return shared.ContextBrigade
+	} else {
+		return shared.ContextAny
+	}
+}
+
+func checkOutPermissions(args []string) shared.Permission {
+	if len(args) > 0 && !isTime(strings.Join(args[0:], " ")) {
+		return shared.PermissionAdmin
+	} else {
+		return shared.PermissionEveryone
+	}
+}
+
+func checkOut(data shared.CommandData) shared.CommandResponse {
+	var tz *time.Location
+	var err error
+	if len(data.Args) == 0 {
+		return endSession(data, time.Now())
+	} else if tz, err = time.LoadLocation(data.Brigade.TimezoneString); err != nil {
+		tz = time.Local
+	}
+	if outTime, err := parseTime(strings.Join(data.Args[0:], " "), tz); err == nil {
+		return endSession(data, outTime)
+	} else if data.Args[0] == "all" {
+		var sessions []models.VolunteerSession
+		if err := db.Find(&sessions, "brigade_id = ? and duration is null", data.Brigade.ID).Error; err != nil {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to get active volunteering sessions for this brigade. Try again later.",
+				},
+			}
+		}
+		var outTime time.Time
+		if len(data.Args) > 1 {
+			var timeErr error
+			if outTime, timeErr = parseTime(strings.Join(data.Args[1:], " "), tz); timeErr != nil {
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Error: shared.CommandError{
+						ErrorType:   shared.ArgumentError,
+						ErrorString: "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 2020 3:04PM` if you're starting a session from another day.",
+					},
+				}
+			}
+		} else {
+			outTime = time.Now()
+		}
+		successes := make([]string, 0)
+		outErrors := make([]string, 0)
+		for _, session := range sessions {
+			if discordUser, err := data.Session.User(session.DiscordUserID); err != nil {
+				outErrors = append(outErrors, "Failed to find user <@!"+session.DiscordUserID+">. Try again later.")
+			} else {
+				response := endSession(shared.CommandData{
+					MessageData: shared.MessageData{
+						Author: discordUser,
+					},
+				}, outTime)
+				if response.Success != "" {
+					successes = append(successes, response.Success)
+				} else {
+					outErrors = append(outErrors, response.Error.ErrorString)
+				}
+			}
+		}
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   strings.Join(successes, "\n"),
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: strings.Join(outErrors, "\n"),
+			},
+		}
+	} else {
+		var users []*discordgo.User
+		successes := make([]string, 0)
+		outErrors := make([]string, 0)
+		for i := 0; i < len(data.Args); i++ { // Loop through arguments until we hit one that isn't a user
+			userID := strings.TrimSuffix(strings.TrimPrefix(data.Args[i], "<@"), ">")
+			if userID != data.Args[i] { // Was a mention, therefore argument is a userID
+				if discordUser, err := data.Session.User(userID); err != nil {
+					outErrors = append(outErrors, "Failed to find user "+data.Args[i]+". Try again later.")
+				} else {
+					users = append(users, discordUser)
+				}
+			} else if outTime, timeErr := parseTime(strings.Join(data.Args[i:], " "), tz); timeErr != nil && i != len(data.Args)-1 {
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Error: shared.CommandError{
+						ErrorType:   shared.ArgumentError,
+						ErrorString: "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 3:04PM` if you're starting a session from another day.",
+					},
+				}
+			} else {
+				if timeErr != nil { // If no out time was provided, set out time to now
+					outTime = time.Now()
+				}
+				for _, user := range users {
+					response := endSession(shared.CommandData{
+						MessageData: shared.MessageData{
+							Author: user,
+						},
+					}, outTime)
+					if response.Success != "" {
+						successes = append(successes, response.Success)
+					} else {
+						outErrors = append(outErrors, response.Error.ErrorString)
+					}
+				}
+			}
+		}
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   strings.Join(successes, "\n"),
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: strings.Join(outErrors, "\n"),
+			},
+		}
+	}
+}
+
+func endSession(data shared.CommandData, outTime time.Time) shared.CommandResponse {
+	var session models.VolunteerSession
+	if err := db.First(&session, "discord_user_id = ? and duration is null", data.Author.ID).Error; err != nil {
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorString: "<@!" + data.Author.ID + "> doesn't seem to have an active volunteering session to end.",
+			},
+		}
+	}
+	if outTime.Before(session.StartTime) {
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorString: "<@! + " + data.Author.ID + ">'s volunteering session can't be ended before it started. Try a later time.",
+			},
+		}
+	}
+	if outTime.After(time.Now()) {
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorString: "<@! + " + data.Author.ID + ">'s volunteering session can't be ended in the future. Try an earlier time.",
+			},
+		}
+	}
+	if err := db.Model(&session).Update("duration", outTime.Round(time.Second).Sub(session.StartTime.Round(time.Second))).Error; err != nil {
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorString: "Failed to end <@! + " + data.Author.ID + ">'s active volunteering session. Try again later.",
+			},
+		}
+	}
+	return shared.CommandResponse{
+		ChannelID: data.ChannelID,
+		Success:   "Ended <@!" + data.Author.ID + ">'s volunteering session, which lasted **" + fmtDuration(time.Duration(session.Duration.Int64)) + "**",
+	}
+}
+
+func getTimePermissions(args []string) shared.Permission {
+	if len(args) > 0 {
+		return shared.PermissionAdmin
+	}
+	return shared.PermissionEveryone
+}
+
+func getTimeContexts(args []string) shared.ExecutionContext {
+	if len(args) > 0 {
+		return shared.ContextBrigade
+	}
+	return shared.ContextAny
+}
+
+func getTime(data shared.CommandData) shared.CommandResponse {
+	var initialSessionSet *gorm.DB
+	var dataFor string
+	if data.ProjectArg != "" {
+		if initialSessionSet = db.Model(models.VolunteerSession{}).Where("brigade_id = ? and project_id = ?", data.Brigade.ID, data.Project.ID); initialSessionSet.Error != nil {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch volunteering sessions",
+				},
+			}
+		}
+		dataFor = "**" + data.Brigade.DisplayName + "**'s **" + data.ProjectArg + "** project"
+	} else if data.BrigadeArg != "" {
+		if initialSessionSet = db.Model(models.VolunteerSession{}).Where("brigade_id = ?", data.Brigade.ID); initialSessionSet.Error != nil {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch volunteering sessions",
+				},
+			}
+		}
+		dataFor = "**" + data.Brigade.Name + "**"
+	} else {
+		dataFor = "<@!" + data.Author.ID + ">"
+		if initialSessionSet = db.Model(models.VolunteerSession{}).Where("discord_user_id = ?", data.Author.ID); initialSessionSet.Error != nil {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch volunteering sessions",
+				},
+			}
+		}
+	}
+	if len(data.Args) == 1 {
+		if data.Args[0] == "projects" {
+			if rows, err := initialSessionSet.Select("project_id, sum(duration)").Group("project_id").Rows(); err != nil {
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Error: shared.CommandError{
+						ErrorType:   shared.ExecutionError,
+						ErrorString: "Failed to fetch brigade's volunteer sessions by project. Try again later.",
+					},
+				}
+			} else {
+				successes := make([]string, 0)
+				successes = append(successes, "Total time for "+dataFor+" by project:")
+				groupingErrors := make([]string, 0)
+				var projectID sql.NullInt64
+				var totalTimeNano int
+				for rows.Next() {
+					if err := rows.Scan(&projectID, &totalTimeNano); err != nil {
+						return shared.CommandResponse{
+							ChannelID: data.ChannelID,
+							Error: shared.CommandError{
+								ErrorType:   shared.ExecutionError,
+								ErrorString: "Failed to group volunteer sessions by project. Try again later.",
+							},
+						}
+					}
+					if projectID.Valid {
+						var project models.Project
+						if err := db.Find(&project, "id = ?", projectID.Int64).Error; err != nil {
+							groupingErrors = append(groupingErrors, fmt.Sprintf("Failed to find project with ID **%v**.", projectID.Int64))
+						} else {
+							successes = append(successes, fmt.Sprintf("%v: **%v**", project.Name, fmtDuration(time.Duration(totalTimeNano))))
+						}
+					} else {
+						successes = append(successes, fmt.Sprintf("No project: **%v**", fmtDuration(time.Duration(totalTimeNano))))
+					}
+				}
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Success:   strings.Join(successes, "\n"),
+					Error: shared.CommandError{
+						ErrorType:   shared.ExecutionError,
+						ErrorString: strings.Join(groupingErrors, "\n"),
+					},
+				}
+			}
+		} else if data.Args[0] == "users" {
+			if rows, err := initialSessionSet.Select("discord_user_id, sum(duration)").Group("discord_user_id").Rows(); err != nil {
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Error: shared.CommandError{
+						ErrorType:   shared.ExecutionError,
+						ErrorString: "Failed to fetch brigade's volunteer sessions by user. Try again later.",
+					},
+				}
+			} else {
+				successes := make([]string, 0)
+				successes = append(successes, "Total time for "+dataFor+" by user:")
+				groupingErrors := make([]string, 0)
+				var discordUserID string
+				var totalTimeNano int
+				for rows.Next() {
+					if err := rows.Scan(&discordUserID, &totalTimeNano); err != nil {
+						return shared.CommandResponse{
+							ChannelID: data.ChannelID,
+							Error: shared.CommandError{
+								ErrorType:   shared.ExecutionError,
+								ErrorString: "Failed to group volunteer sessions by user. Try again later.",
+							},
+						}
+					}
+					if _, err := data.Session.User(discordUserID); err != nil {
+						groupingErrors = append(groupingErrors, "Failed to find user <@!"+discordUserID+">. Try again later.")
+					} else {
+						successes = append(successes, fmt.Sprintf("<@!%v>: **%v**", discordUserID, fmtDuration(time.Duration(totalTimeNano))))
+					}
+				}
+				return shared.CommandResponse{
+					ChannelID: data.ChannelID,
+					Success:   strings.Join(successes, "\n"),
+					Error: shared.CommandError{
+						ErrorType:   shared.ExecutionError,
+						ErrorString: strings.Join(groupingErrors, "\n"),
+					},
+				}
+			}
+		} else {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ArgumentError,
+					ErrorString: "Invalid category to sort by provided. Try `projects` or `users`.",
+				},
+			}
+		}
+	} else {
+		var totalTimeNano int
+		if err := initialSessionSet.Select("sum(duration)").Row().Scan(&totalTimeNano); err != nil {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ExecutionError,
+					ErrorString: "Failed to fetch volunteer sessions. Try again later.",
+				},
+			}
+		}
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Success:   fmt.Sprintf("Total time for %v: **%v**", dataFor, fmtDuration(time.Duration(totalTimeNano))),
+		}
+	}
+}
+
+// Move project to maintenance
+func maintainProject(data shared.CommandData) shared.CommandResponse {
+	channel, err := data.Session.Channel(data.Project.DiscordChannelID)
+	githubChannel, err := data.Session.Channel(data.Project.GithubDiscordChannelID)
 	if githubChannel == nil || channel == nil {
 		fmt.Println("error fetching guild channels,", err)
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to fetch Discord channels for project. Try again later.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to fetch Discord channels for project. Try again later.",
 			},
 		}
 	}
 	if _, err = data.Session.ChannelDelete(githubChannel.ID); err != nil {
 		fmt.Println("error deleting guild channel,", err)
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to delete GitHub channel for **" + projectName + "**. Have an administrator do this manually.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to delete GitHub channel for **" + data.Project.Name + "**. Have an administrator do this manually.",
 			},
 		}
 	}
@@ -819,18 +1367,17 @@ func maintainProject(data shared.CommandData) []shared.FunctionResponse {
 	}
 	if _, err = data.Session.ChannelEditComplex(channel.ID, &editData); err != nil {
 		fmt.Println("error editing guild channel,", err)
-		return []shared.FunctionResponse{
-			{
-				ChannelID: data.ChannelID,
-				Error:     "Failed to move discussion channel for **" + projectName + "**. Have an administrator do this manually.",
+		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
+			Error: shared.CommandError{
+				ErrorType:   shared.ExecutionError,
+				ErrorString: "Failed to move discussion channel for **" + data.Project.Name + "**. Have an administrator do this manually.",
 			},
 		}
 	}
-	return []shared.FunctionResponse{
-		{
-			ChannelID: data.ChannelID,
-			Success:   "Successfully moved  **" + projectName + "** to maintenance.",
-		},
+	return shared.CommandResponse{
+		ChannelID: data.ChannelID,
+		Success:   "Successfully moved  **" + data.Project.Name + "** to maintenance.",
 	}
 }
 
@@ -851,10 +1398,10 @@ func orEmpty(str, defaultStr string) string {
 }
 
 func argCountFmt(argCount int) string {
-	if argCount == 1 {
+	if argCount == -1 {
 		return "∞"
 	}
-	return strconv.Itoa(argCount);
+	return strconv.Itoa(argCount)
 }
 
 func containsUser(slice []*discordgo.User, value *discordgo.User) bool {

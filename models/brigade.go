@@ -2,8 +2,9 @@ package models
 
 type Brigade struct {
 	// Discord config
-	ID                        int    `gorm:"AUTO_INCREMENT"`
+	ID                        int    `gorm:"primary_key;AUTO_INCREMENT"`
 	Name                      string `gorm:"not null;unique"`
+	DisplayName               string `gorm:"not null;unique"`
 	GuildID                   string `gorm:"not null;unique"`
 	ActiveProjectCategoryID   string `gorm:"not null;unique"`
 	InactiveProjectCategoryID string `gorm:"not null;unique"`

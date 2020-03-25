@@ -1,7 +1,7 @@
 package models
 
 type File struct {
-	ID        int `gorm:"not null"`
+	ID        int `gorm:"primary_key;AUTO_INCREMENT"`
 	BrigadeID int `gorm:"not null"`
 	Brigade   Brigade
 	Name      string `gorm:"not null"`
