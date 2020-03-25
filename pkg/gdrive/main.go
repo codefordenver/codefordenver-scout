@@ -229,7 +229,6 @@ func FetchAgenda(data shared.CommandData) shared.CommandResponse {
 			}
 		}
 		if len(r.Files) == 0 {
-			fmt.Println("empty or invalid agenda folder")
 			return shared.CommandResponse{
 				ChannelID: data.ChannelID,
 				Error:     shared.CommandError{
