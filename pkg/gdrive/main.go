@@ -228,6 +228,16 @@ func FetchAgenda(data shared.CommandData) shared.CommandResponse {
 				},
 			}
 		}
+		if len(r.Files) == 0 {
+			fmt.Println("empty or invalid agenda folder")
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error:     shared.CommandError{
+				ErrorType: shared.ExecutionError,
+				ErrorString: "Found an empty or invalid agenda folder in Google Drive. Check your configuration.",
+				},
+			}
+		}
 		newAgenda := drive.File{Name: fmt.Sprintf("Meeting Agenda %s", nextMeetingDate.Format("2006/01/02"))}
 		agenda, err = client.Files.Copy(r.Files[0].Id, &newAgenda).Fields("name, webViewLink").Do()
 		if err != nil {
