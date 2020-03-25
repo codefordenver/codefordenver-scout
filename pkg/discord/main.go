@@ -1148,7 +1148,7 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
-				ErrorString: "<@! + " + data.Author.ID + ">'s volunteering session can't be ended before it started. Try a later time.",
+				ErrorString: "<@!" + data.Author.ID + ">'s volunteering session can't be ended before it started. Try a later time.",
 			},
 		}
 	}
@@ -1156,7 +1156,7 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
-				ErrorString: "<@! + " + data.Author.ID + ">'s volunteering session can't be ended in the future. Try an earlier time.",
+				ErrorString: "<@!" + data.Author.ID + ">'s volunteering session can't be ended in the future. Try an earlier time.",
 			},
 		}
 	}
@@ -1164,7 +1164,7 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
-				ErrorString: "Failed to end <@! + " + data.Author.ID + ">'s active volunteering session. Try again later.",
+				ErrorString: "Failed to end <@!" + data.Author.ID + ">'s active volunteering session. Try again later.",
 			},
 		}
 	}
