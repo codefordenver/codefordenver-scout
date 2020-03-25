@@ -46,9 +46,6 @@ func handleResponse(s *discordgo.Session, r shared.CommandResponse) {
 		}
 	}
 	if r.Error.ErrorString != "" {
-		if r.Error.ErrorType == shared.ArgumentError {
-			r.Error.ErrorString += " If you attempted to specify a brigade or project, ensure it was spelled correctly."
-		}
 		if _, err := s.ChannelMessageSend(r.ChannelID, r.Error.ErrorString); err != nil {
 			fmt.Println("Failed to send response from command to channel")
 		}
@@ -114,7 +111,6 @@ func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Sessi
 		if channel, err := s.Channel(cmdData.ChannelID); err != nil {
 			return err
 		} else {
-			start := time.Now()
 			var brigadeName, projectName string
 			var brigadeState, projectState bool
 			i := 0
@@ -128,12 +124,12 @@ func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Sessi
 					continue
 				}
 				if brigadeState {
-					brigadeName = arg
+					brigadeName = strings.ToLower(arg)
 					brigadeState = false
 					continue
 				}
 				if projectState {
-					projectName = arg
+					projectName = strings.ToLower(arg)
 					projectState = false
 					continue
 				}
@@ -165,7 +161,6 @@ func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Sessi
 					cmdData.Project = getChannelProject(channel)
 				}
 			}
-			fmt.Println(time.Now().Sub(start))
 
 			context := command.ExecutionContext
 			if command.ContextHandler != nil { // If the command has a context handler, use that instead
@@ -192,10 +187,10 @@ func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Sessi
 
 			if len(cmdData.Args) < command.MinArgs || (command.MaxArgs != -1 && len(cmdData.Args) > command.MaxArgs) { // Check if # of arguments is adequate
 				if command.MinArgs == command.MaxArgs {
-					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+". If you attempted to specify a brigade or project, ensure it was spelled correctly.")
+					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs) + ".")
 					return err
 				} else {
-					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)+". If you attempted to specify a brigade or project, ensure it was spelled correctly.")
+					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)+".")
 					return err
 				}
 			}
@@ -521,7 +516,7 @@ func MessageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 		if commandText == m.Content {
 			commandText = strings.TrimPrefix(m.Content, fmt.Sprintf("<@%v>", s.State.User.ID))
 		}
-		err := cmdHandler.DispatchCommand(strings.ToLower(commandText), s, m)
+		err := cmdHandler.DispatchCommand(commandText, s, m)
 		if err != nil {
 			fmt.Println("error dispatching command", err)
 		}
@@ -860,7 +855,7 @@ func fetchFile(data shared.CommandData) (*models.File, error) {
 }
 
 func isTime(timeStr string) bool {
-	if matches, err := regexp.Match(`((\d{1,2}|\w{3})([/ ])\d{1,2})? ?\d{1,2}(:\d{1,2}){1,2}(AM|PM)?`, []byte(timeStr)); err != nil {
+	if matches, err := regexp.Match(`^((\d{1,2}|\w{3})([/ ])\d{1,2}[/ ]\d{4})? ?\d{1,2}(:\d{1,2}){1,2}(AM|PM)?$`, []byte(timeStr)); err != nil {
 		return false
 	} else {
 		return matches
@@ -878,14 +873,14 @@ func parseTime(timeStr string, location *time.Location) (time.Time, error) {
 			"15:04",
 			"15:04:05",
 			// Date & time
-			"Jan 2 3:04PM",
-			"Jan 2 3:04:05PM",
-			"Jan 2 15:04",
-			"Jan 2 15:04:05",
-			"1/2 3:04PM",
-			"1/2 3:04:05PM",
-			"1/2 15:04",
-			"1/2 15:04:05",
+			"Jan 2 2006 3:04PM",
+			"Jan 2 2006 3:04:05PM",
+			"Jan 2 2006 15:04",
+			"Jan 2 2006 15:04:05",
+			"1/2/2006 3:04PM",
+			"1/2/2006 3:04:05PM",
+			"1/2/2006 15:04",
+			"1/2/2006 15:04:05",
 		}
 		var outTime time.Time
 		var err error
@@ -895,7 +890,7 @@ func parseTime(timeStr string, location *time.Location) (time.Time, error) {
 				if i <= 3 {
 					outTime = time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), location)
 				} else {
-					outTime = time.Date(now.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), location)
+					outTime = time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), location)
 				}
 				return outTime, nil
 			}
@@ -922,20 +917,43 @@ func checkIn(data shared.CommandData) shared.CommandResponse {
 	var err error
 	if len(data.Args) == 0 {
 		return startSession(data, time.Now())
-	} else if tz, err = time.LoadLocation(data.Brigade.TimezoneString); err != nil {
+	}
+	if tz, err = time.LoadLocation(data.Brigade.TimezoneString); err != nil {
 		tz = time.Local
 	}
-	if inTime, err := parseTime(strings.Join(data.Args[0:], " "), tz); err != nil {
+	var inTime time.Time
+	var duration time.Duration
+	var durationErr error
+	timeStr := strings.Join(data.Args[:len(data.Args)], " ")
+	timeStrDuration := strings.Join(data.Args[:len(data.Args) - 1], " ")
+	if !isTime(timeStr) && isTime(timeStrDuration){ // If all the arguments together aren't a time, we try a duration
+		if duration, durationErr = time.ParseDuration(data.Args[len(data.Args)-1]); durationErr == nil {
+			timeStr = timeStrDuration
+		} else {
+			return shared.CommandResponse{
+				ChannelID: data.ChannelID,
+				Error: shared.CommandError{
+					ErrorType:   shared.ArgumentError,
+					ErrorString: "Failed to parse provided session duration. Try formatting the duration as `1h`",
+				},
+			}
+		}
+	}
+	if inTime, err = parseTime(timeStr, tz); err != nil {
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
 				ErrorType:   shared.ArgumentError,
-				ErrorString: "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 3:04PM` if you're starting a session from another day.",
+				ErrorString: "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 2020 3:04PM` if you're starting a session from another day.",
 			},
 		}
-	} else {
-		return startSession(data, inTime)
 	}
+	var res shared.CommandResponse
+	res = startSession(data, inTime)
+	if res.Error.ErrorString == "" && timeStr == timeStrDuration { // We have a duration
+		res = endSession(data, inTime.Add(duration))
+	}
+	return res
 }
 
 func startSession(data shared.CommandData, inTime time.Time) shared.CommandResponse {
@@ -1034,7 +1052,7 @@ func checkOut(data shared.CommandData) shared.CommandResponse {
 					ChannelID: data.ChannelID,
 					Error: shared.CommandError{
 						ErrorType:   shared.ArgumentError,
-						ErrorString: "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 3:04PM` if you're starting a session from another day.",
+						ErrorString: "Failed to parse provided time. Try formatting your time as `3:04PM` or `Jan 2 2020 3:04PM` if you're starting a session from another day.",
 					},
 				}
 			}
@@ -1120,6 +1138,7 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 	var session models.VolunteerSession
 	if err := db.First(&session, "discord_user_id = ? and duration is null", data.Author.ID).Error; err != nil {
 		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
 				ErrorString: "<@!" + data.Author.ID + "> doesn't seem to have an active volunteering session to end.",
 			},
@@ -1127,6 +1146,7 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 	}
 	if outTime.Before(session.StartTime) {
 		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
 				ErrorString: "<@! + " + data.Author.ID + ">'s volunteering session can't be ended before it started. Try a later time.",
 			},
@@ -1134,6 +1154,7 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 	}
 	if outTime.After(time.Now()) {
 		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
 				ErrorString: "<@! + " + data.Author.ID + ">'s volunteering session can't be ended in the future. Try an earlier time.",
 			},
@@ -1141,6 +1162,7 @@ func endSession(data shared.CommandData, outTime time.Time) shared.CommandRespon
 	}
 	if err := db.Model(&session).Update("duration", outTime.Round(time.Second).Sub(session.StartTime.Round(time.Second))).Error; err != nil {
 		return shared.CommandResponse{
+			ChannelID: data.ChannelID,
 			Error: shared.CommandError{
 				ErrorString: "Failed to end <@! + " + data.Author.ID + ">'s active volunteering session. Try again later.",
 			},
