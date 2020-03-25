@@ -115,23 +115,26 @@ func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Sessi
 			return err
 		} else {
 			start := time.Now()
-			if strings.Count(commandString, "brigade:") > 1 {
-				_, err := s.ChannelMessageSend(m.ChannelID, "You provided more than one `brigade:` argument. Try again with just one, or send the command from a brigade channel.")
-				return err
-			}
-			if strings.Count(commandString, "project:") > 1 {
-				_, err := s.ChannelMessageSend(m.ChannelID, "You provided more than one `project:` argument. Try again with just one, or send the command from a project channel")
-				return err
-			}
 			var brigadeName, projectName string
+			var brigadeState, projectState bool
 			i := 0
 			for _, arg := range cmdData.Args {
-				if trimmedArg := strings.TrimPrefix(arg, "brigade:"); trimmedArg != arg {
-					brigadeName = trimmedArg
+				if arg == "-b" {
+					brigadeState = true
 					continue
 				}
-				if trimmedArg := strings.TrimPrefix(arg, "project:"); trimmedArg != arg {
-					projectName = trimmedArg
+				if arg == "-p" {
+					projectState = true
+					continue
+				}
+				if brigadeState {
+					brigadeName = arg
+					brigadeState = false
+					continue
+				}
+				if projectState {
+					projectName = arg
+					projectState = false
 					continue
 				}
 				cmdData.Args[i] = arg
@@ -641,7 +644,7 @@ func joinProject(data shared.CommandData) shared.CommandResponse {
 
 // Remove user from project
 func leaveProject(data shared.CommandData) shared.CommandResponse {
-	if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
+	if roles, err := data.Session.GuildRoles(data.Brigade.GuildID); err != nil {
 		fmt.Println("error fetching guild roles,", err)
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
@@ -653,7 +656,7 @@ func leaveProject(data shared.CommandData) shared.CommandResponse {
 	} else {
 		for _, role := range roles {
 			if strings.HasPrefix(strings.ToLower(role.Name), strings.ToLower(data.Project.Name)) {
-				if err := data.Session.GuildMemberRoleRemove(data.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
+				if err := data.Session.GuildMemberRoleRemove(data.Brigade.GuildID, data.MessageData.Author.ID, role.ID); err != nil {
 					fmt.Println("error removing guild role,", err)
 					return shared.CommandResponse{
 						ChannelID: data.ChannelID,
@@ -683,14 +686,14 @@ func setChampions(data shared.CommandData) shared.CommandResponse {
 		if discordUser, err := data.Session.User(userID); err != nil {
 			championErrors = append(championErrors, "Failed to find user "+user+". Try again later.")
 		} else {
-			if roles, err := data.Session.GuildRoles(data.GuildID); err != nil {
+			if roles, err := data.Session.GuildRoles(data.Brigade.GuildID); err != nil {
 				fmt.Println("error fetching guild roles,", err)
 				championErrors = append(championErrors, "Failed to get Discord roles to add champion role. Try again later.")
 			} else {
 				addedChampions = make([]string, 0)
 				for _, role := range roles {
 					if strings.ToLower(role.Name) == strings.ToLower(data.Project.Name)+"-champion" {
-						if err := data.Session.GuildMemberRoleAdd(data.GuildID, discordUser.ID, role.ID); err != nil {
+						if err := data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, discordUser.ID, role.ID); err != nil {
 							fmt.Println("error adding guild role,", err)
 							championErrors = append(championErrors, "Failed to add champion role to <@!"+userID+">. Have an administrator to add it manually.")
 						} else {
@@ -798,7 +801,6 @@ func untrackFile(data shared.CommandData) shared.CommandResponse {
 			},
 		}
 	}
-	/* Delete from Files where FileName matches file.Name and brigade ID matches brigade with data.GuildID */
 	if err = db.Delete(&file).Error; err != nil {
 		return shared.CommandResponse{
 			ChannelID: data.ChannelID,
@@ -844,7 +846,6 @@ func fetchFileDispatch(data shared.CommandData) shared.CommandResponse {
 // Return a link to requested file
 func fetchFile(data shared.CommandData) (*models.File, error) {
 	fileName := strings.ToLower(data.Args[0])
-	/* file := select all from Files where name matches fileName and brigade ID matches a brigade with data.GuildID*/
 	var files []models.File
 	if err := db.Where("name = ? and brigade_id = ?", fileName, data.Brigade.ID).Find(&files).Error; err != nil {
 		fmt.Println("error fetching file,", err)
