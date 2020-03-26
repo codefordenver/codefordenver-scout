@@ -108,6 +108,7 @@ func handleRepositoryCreate(repo Repository) {
 	var championRole *discordgo.Role
 	var projectRole *discordgo.Role
 	var textChannel *discordgo.Channel
+	var roles []*discordgo.Role
 	/* brigade := select brigades where github_organization matches repo.owner.name */
 	var brigade models.Brigade
 	err := db.Where("github_organization = ?", repo.Owner.Name).First(&brigade).Error
@@ -122,7 +123,7 @@ func handleRepositoryCreate(repo Repository) {
 			if (channel.ParentID == brigade.ActiveProjectCategoryID || channel.ParentID == brigade.InactiveProjectCategoryID) && strings.Contains(strings.ToLower(repo.Name), channel.Name) {
 				projectExists = true
 				textChannel = channel
-				if roles, err := discordClient.GuildRoles(brigade.GuildID); err != nil {
+				if roles, err = discordClient.GuildRoles(brigade.GuildID); err != nil {
 					fmt.Println("error fetching guild roles,", err)
 				} else {
 					for _, role := range roles {
@@ -144,26 +145,54 @@ func handleRepositoryCreate(repo Repository) {
 		colorInt = (colorInt << 8) + int(c.Green)
 		colorInt = (colorInt << 8) + int(c.Blue)
 		var err error
-		championRole, err = discordClient.GuildRoleCreate(brigade.GuildID)
+		var championRoleErr error
+		var roleErr error
+		roles, err = discordClient.GuildRoles(brigade.GuildID)
 		if err != nil {
+			fmt.Println("error fetching guild roles,", err)
+		}
+		championRole, championRoleErr = discordClient.GuildRoleCreate(brigade.GuildID)
+		rolePermission := discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
+		if championRoleErr != nil {
 			fmt.Println("error creating guild role,", err)
 		} else {
-			rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
 			if _, err = discordClient.GuildRoleEdit(brigade.GuildID, championRole.ID, repo.Name+"-champion", colorInt, false, rolePermission, true); err != nil {
 				fmt.Println("error editing guild role,", err)
 			}
 		}
-		projectRole, err = discordClient.GuildRoleCreate(brigade.GuildID)
-		if err != nil {
+		projectRole, roleErr = discordClient.GuildRoleCreate(brigade.GuildID)
+		if roleErr != nil {
 			fmt.Println("error creating guild role,", err)
 		} else {
 			c = c.Lighten(.25)
 			colorInt := int(c.Red)
 			colorInt = (colorInt << 8) + int(c.Green)
 			colorInt = (colorInt << 8) + int(c.Blue)
-			rolePermission := discordgo.PermissionCreateInstantInvite | discordgo.PermissionChangeNickname | discordgo.PermissionReadMessages | discordgo.PermissionSendMessages | discordgo.PermissionSendTTSMessages | discordgo.PermissionEmbedLinks | discordgo.PermissionAttachFiles | discordgo.PermissionReadMessageHistory | discordgo.PermissionMentionEveryone | discordgo.PermissionUseExternalEmojis | discordgo.PermissionAddReactions | discordgo.PermissionVoiceConnect | discordgo.PermissionVoiceSpeak
 			if _, err = discordClient.GuildRoleEdit(brigade.GuildID, projectRole.ID, repo.Name, colorInt, false, rolePermission, true); err != nil {
 				fmt.Println("error editing guild role,", err)
+			}
+		}
+		if err != nil {
+			fmt.Println("error fetching guild roles")
+		} else {
+			var memberIndex int
+			for _, role := range roles {
+				if role.ID == brigade.MemberRole {
+					memberIndex = role.Position
+					break
+				}
+			}
+			var newRoleOrder []*discordgo.Role
+			if championRoleErr == nil {
+				championRole.Position = memberIndex + 1
+				newRoleOrder = append(newRoleOrder, championRole)
+			}
+			if roleErr == nil {
+				projectRole.Position = memberIndex + 1
+				newRoleOrder = append(newRoleOrder, projectRole)
+			}
+			if _, err = discordClient.GuildRoleReorder(brigade.GuildID, newRoleOrder); err != nil {
+				fmt.Println("error reordering guild roles,", err)
 			}
 		}
 	}
@@ -172,7 +201,7 @@ func handleRepositoryCreate(repo Repository) {
 	projectChampionOverwrite := discordgo.PermissionOverwrite{
 		ID:    championRole.ID,
 		Type:  "role",
-		Allow: discordgo.PermissionReadMessages | discordgo.PermissionManageWebhooks | discordgo.PermissionManageChannels,
+		Allow: discordgo.PermissionManageWebhooks,
 	}
 	projectOverwrite := discordgo.PermissionOverwrite{
 		ID:    projectRole.ID,
