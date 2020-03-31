@@ -1,9 +1,9 @@
 package models
 
 type File struct {
-	ID        int `gorm:"primary_key;AUTO_INCREMENT"`
-	BrigadeID int `gorm:"not null"`
+	ID        int `gorm:"PRIMARY_KEY"`
+	BrigadeID int `gorm:"type:int REFERENCES brigades(id);NOT NULL;"`
 	Brigade   Brigade
-	Name      string `gorm:"not null"`
-	URL       string `gorm:"not null"`
+	Name      string `gorm:"NOT NULL"`
+	URL       string `gorm:"NOT NULL"`
 }

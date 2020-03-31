@@ -2,22 +2,22 @@ package models
 
 type Brigade struct {
 	// Discord config
-	ID                        int    `gorm:"primary_key;AUTO_INCREMENT"`
-	Name                      string `gorm:"not null;unique"`
-	DisplayName               string `gorm:"not null;unique"`
-	GuildID                   string `gorm:"not null;unique"`
-	ActiveProjectCategoryID   string `gorm:"not null;unique"`
-	InactiveProjectCategoryID string `gorm:"not null;unique"`
-	NewUserRole               string `gorm:"not null;unique"`
-	OnboardingRole            string `gorm:"not null;unique"`
-	MemberRole                string `gorm:"not null;unique"`
-	OnboardingInviteCode      string `gorm:"not null;unique"`
-	OnboardingInviteCount     int    `gorm:"not null"`
-	CodeOfConductMessageID    string `gorm:"not null;unique"`
+	ID                        int   `gorm:"PRIMARY_KEY"`
+	Name                      string `gorm:"NOT NULL;UNIQUE"`
+	DisplayName               string `gorm:"NOT NULL;UNIQUE"`
+	GuildID                   string `gorm:"NOT NULL;UNIQUE"`
+	ActiveProjectCategoryID   string `gorm:"NOT NULL;UNIQUE"`
+	InactiveProjectCategoryID string `gorm:"NOT NULL;UNIQUE"`
+	NewUserRole               string `gorm:"NOT NULL;UNIQUE"`
+	OnboardingRole            string `gorm:"NOT NULL;UNIQUE"`
+	MemberRole                string `gorm:"NOT NULL;UNIQUE"`
+	OnboardingInviteCode      string `gorm:"NOT NULL;UNIQUE"`
+	OnboardingInviteCount     int   `gorm:"NOT NULL"`
+	CodeOfConductMessageID    string `gorm:"NOT NULL;UNIQUE"`
 	// GDrive Config
-	AgendaFolderID string `gorm:"not null;unique"`
-	TimezoneString string `gorm:"not null"`
+	AgendaFolderID string `gorm:"NOT NULL;UNIQUE"`
+	TimezoneString string `gorm:"NOT NULL"`
 	// Github Config
-	GithubOrganization string `gorm:"not null;unique"`
-	IssueEmoji         string `gorm:"not null"`
+	GithubOrganization string `gorm:"NOT NULL;UNIQUE"`
+	IssueEmoji         string `gorm:"NOT NULL"`
 }
