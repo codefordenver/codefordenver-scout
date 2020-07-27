@@ -2,7 +2,7 @@
 ## Commands
 General Usage:
 ```
-![command name] [arguments]
+![command name] [arguments] [-b brigade] [-p project]
 ```
 Commands:
 - `!onboardall` - Converts all users with new or onboarding role to member role
@@ -11,9 +11,12 @@ Commands:
 - `!join [project name]` - Adds user to the project
 - `!leave [project name]` - Removes user from the project
 - `!maintain [project name]` - Moves a project to maintenance
-- `!track [file name] [link]` - Adds the file to Airtable
-- `!untrack [file name]` - Removes the file from Airtable
-- `!fetch [file name]` - Fetches a file specified in Airtable
+- `!track [file name] [link]` - Adds the specified file to the brigade
+- `!untrack [file name]` - Removes the specified file from the brigade
+- `!fetch [file name]` - Fetches the specified file for the brigade
+- `!in [start time]` - Starts a session at the specified time, or when the command runs.
+- `!out [end time]` - Ends your volunteer session at the specified time, or when the command runs.
+- `!time [category]` - Fetches time contributed to the specified brigade, project, or the command sender broken down by the specified category.
 
 Note: Commands can also be triggered by `@Scout [command]`
 ## Development
