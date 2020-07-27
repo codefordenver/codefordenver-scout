@@ -3,9 +3,9 @@ package models
 import "time"
 
 type Meeting struct {
-	ID              int `gorm:"PRIMARY_KEY"`
-	BrigadeID       int `gorm:"type:int REFERENCES brigades(id);NOT NULL;"`
+	ID              int `gorm:"primary_key;AUTO_INCREMENT"`
+	BrigadeID       int `gorm:"not null"`
 	Brigade         Brigade
-	Date            time.Time `gorm:"NOT NULL"`
-	AttendanceCount int       `gorm:"NOT NULL"`
+	Date            time.Time `gorm:"not null"`
+	AttendanceCount int       `gorm:"not null"`
 }
