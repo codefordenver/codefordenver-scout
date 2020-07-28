@@ -1,9 +1,9 @@
 package models
 
 type Project struct {
-	ID               int `gorm:"primary_key;AUTO_INCREMENT"`
-	BrigadeID        int `gorm:"not null"`
-	Brigade          Brigade
+	ID               int `gorm:"primary_key"`
+	BrigadeID        int `gorm:"type:int REFERENCES brigades(id);not null"`
+	Brigade          Brigade `gorm:"foreignkey:BrigadeID"`
 	Name             string `gorm:"not null"`
 	Description string
 	Stack string

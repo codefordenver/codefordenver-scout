@@ -6,12 +6,12 @@ import (
 )
 
 type VolunteerSession struct {
-	ID            int `gorm:"PRIMARY_KEY"`
-	BrigadeID     int `gorm:"type:int REFERENCES brigades(id);NOT NULL;"`
-	Brigade       Brigade `gorm:"FOREIGNKEY:BrigadeID"`
-	DiscordUserID string `gorm:"NOT NULL"`
+	ID            int `gorm:"primary_key"`
+	BrigadeID     int `gorm:"type:int REFERENCES brigades(id);not null"`
+	Brigade       Brigade `gorm:"foreignkey:BrigadeID"`
+	DiscordUserID string `gorm:"not null"`
 	ProjectID     sql.NullInt64 `gorm:"type:int REFERENCES projects(id)"`
-	Project       Project `gorm:"FOREIGNKEY:ProjectID"`
-	StartTime     time.Time `gorm:"NOT NULL"`
+	Project       Project `gorm:"foreignkey:ProjectID"`
+	StartTime     time.Time `gorm:"not null"`
 	Duration      sql.NullInt64
 }
