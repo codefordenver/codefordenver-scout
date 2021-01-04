@@ -175,12 +175,12 @@ func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Sessi
 				}
 			case shared.ContextBrigade:
 				if cmdData.Brigade == nil {
-					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a brigade channel. Ensure you either ran the command from a brigade channel or specified a `brigade:` argument.")
+					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a brigade channel. Ensure you either ran the command from a brigade channel or specified a `-b` argument.")
 					return err
 				}
 			case shared.ContextProject:
 				if cmdData.Project == nil {
-					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a project channel. Ensure you either ran the command from a project channel or specified a `brigade:` and `project:` argument.")
+					_, err := s.ChannelMessageSend(m.ChannelID, "`!"+key+"` must be executed from a project channel. Ensure you either ran the command from a project channel or specified a `-b` and `-p` argument.")
 					return err
 				}
 			}
