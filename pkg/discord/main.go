@@ -548,19 +548,23 @@ func onboardGroup(data shared.CommandData, r ...string) shared.CommandResponse {
 	}
 	var onboardingErrors string
 	onboardedUsers := make([]*discordgo.User, 0)
-	for _, member := range guild.Members {
-		for _, role := range r {
-			if contains(member.Roles, role) {
-				if err = data.Session.GuildMemberRoleRemove(data.Brigade.GuildID, member.User.ID, role); err != nil {
-					fmt.Println("error removing guild role,", err)
-					onboardingErrors += "\nFailed to remove **" + role + "** role from " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to remove it manually."
+	if members, err := data.Session.GuildMembers(data.GuildID, "", 0); err != nil {
+		fmt.Println("error fetching guild members,", err)
+	} else {
+		for _, member := range members {
+			for _, role := range r {
+				if contains(member.Roles, role) {
+					if err = data.Session.GuildMemberRoleRemove(data.Brigade.GuildID, member.User.ID, role); err != nil {
+						fmt.Println("error removing guild role,", err)
+						onboardingErrors += "\nFailed to remove **" + role + "** role from " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to remove it manually."
+					}
+					if err = data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, member.User.ID, data.Brigade.MemberRole); err != nil {
+						fmt.Println("error adding guild role,", err)
+						onboardingErrors += "\nFailed to add **" + role + "** role to " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to add it manually."
+					}
+					onboardedUsers = append(onboardedUsers, member.User)
+					break
 				}
-				if err = data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, member.User.ID, data.Brigade.MemberRole); err != nil {
-					fmt.Println("error adding guild role,", err)
-					onboardingErrors += "\nFailed to add **" + role + "** role to " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to add it manually."
-				}
-				onboardedUsers = append(onboardedUsers, member.User)
-				break
 			}
 		}
 	}
