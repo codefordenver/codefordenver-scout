@@ -5,3 +5,6 @@ token.json
 # ignore binaries
 codefordenver-scout
 main
+
+# ignore build files
+tmp
