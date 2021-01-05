@@ -55,7 +55,6 @@ func handleResponse(s *discordgo.Session, r shared.CommandResponse) {
 func getBrigade(name string) *models.Brigade {
 	var brigade models.Brigade
 	if err := db.Find(&brigade, "name = ?", name).Error; err != nil {
-		fmt.Println(err)
 		return nil
 	}
 	return &brigade
@@ -64,7 +63,6 @@ func getBrigade(name string) *models.Brigade {
 func getChannelBrigade(channel *discordgo.Channel) *models.Brigade {
 	var brigade models.Brigade
 	if err := db.Find(&brigade, "guild_id = ?", channel.GuildID).Error; err != nil {
-		fmt.Println(err)
 		return nil
 	}
 	return &brigade
@@ -74,7 +72,6 @@ func getProject(name string, brigadeID int) *models.Project {
 	name = strings.ToLower(name)
 	var project models.Project
 	if err := db.Find(&project, "brigade_id = ? and name = ?", brigadeID, name).Error; err != nil {
-		fmt.Println(err)
 		return nil
 	}
 	return &project
@@ -83,7 +80,6 @@ func getProject(name string, brigadeID int) *models.Project {
 func getChannelProject(channel *discordgo.Channel) *models.Project {
 	var project models.Project
 	if err := db.Find(&project, "discord_channel_id = ? or github_discord_channel_id = ?", channel.ID, channel.ID).Error; err != nil {
-		fmt.Println(err)
 		return nil
 	}
 	return &project
@@ -535,32 +531,25 @@ func onboardAll(data shared.CommandData) shared.CommandResponse {
 
 // Give users with the onboarding and/or new member role the full member role
 func onboardGroup(data shared.CommandData, r ...string) shared.CommandResponse {
-	guild, err := data.Session.Guild(data.Brigade.GuildID)
-	if err != nil {
-		fmt.Println("error fetching guild,", err)
-		return shared.CommandResponse{
-			ChannelID: data.ChannelID,
-			Error: shared.CommandError{
-				ErrorType:   shared.ExecutionError,
-				ErrorString: "Failed to get Discord server for onboarding. Try again later.",
-			},
-		}
-	}
 	var onboardingErrors string
 	onboardedUsers := make([]*discordgo.User, 0)
-	for _, member := range guild.Members {
-		for _, role := range r {
-			if contains(member.Roles, role) {
-				if err = data.Session.GuildMemberRoleRemove(data.Brigade.GuildID, member.User.ID, role); err != nil {
-					fmt.Println("error removing guild role,", err)
-					onboardingErrors += "\nFailed to remove **" + role + "** role from " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to remove it manually."
+	if members, err := data.Session.GuildMembers(data.GuildID, "", 1000); err != nil {
+		fmt.Println("error fetching guild members,", err)
+	} else {
+		for _, member := range members {
+			for _, role := range r {
+				if contains(member.Roles, role) {
+					if err = data.Session.GuildMemberRoleRemove(data.Brigade.GuildID, member.User.ID, role); err != nil {
+						fmt.Println("error removing guild role,", err)
+						onboardingErrors += "\nFailed to remove **" + role + "** role from " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to remove it manually."
+					}
+					if err = data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, member.User.ID, data.Brigade.MemberRole); err != nil {
+						fmt.Println("error adding guild role,", err)
+						onboardingErrors += "\nFailed to add **" + role + "** role to " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to add it manually."
+					}
+					onboardedUsers = append(onboardedUsers, member.User)
+					break
 				}
-				if err = data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, member.User.ID, data.Brigade.MemberRole); err != nil {
-					fmt.Println("error adding guild role,", err)
-					onboardingErrors += "\nFailed to add **" + role + "** role to " + orEmpty(member.Nick, member.User.Username) + ". Have an administrator to add it manually."
-				}
-				onboardedUsers = append(onboardedUsers, member.User)
-				break
 			}
 		}
 	}
