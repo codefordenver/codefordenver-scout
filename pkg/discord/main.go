@@ -533,7 +533,7 @@ func onboardAll(data shared.CommandData) shared.CommandResponse {
 func onboardGroup(data shared.CommandData, r ...string) shared.CommandResponse {
 	var onboardingErrors string
 	onboardedUsers := make([]*discordgo.User, 0)
-	if members, err := data.Session.GuildMembers(data.GuildID, "", 0); err != nil {
+	if members, err := data.Session.GuildMembers(data.GuildID, "", 1000); err != nil {
 		fmt.Println("error fetching guild members,", err)
 	} else {
 		for _, member := range members {

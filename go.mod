@@ -3,7 +3,7 @@ module github.com/codefordenver/codefordenver-scout
 require (
 	cloud.google.com/go v0.51.0 // indirect
 	github.com/bradleyfalzon/ghinstallation v1.1.0
-	github.com/bwmarrin/discordgo v0.20.2
+	github.com/bwmarrin/discordgo v0.22.0
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/go-github v17.0.0+incompatible
 	github.com/gorilla/websocket v1.4.1 // indirect
