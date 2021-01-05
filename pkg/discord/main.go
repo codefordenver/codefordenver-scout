@@ -97,6 +97,7 @@ func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Sessi
 	msgData := shared.MessageData{
 		ChannelID: m.ChannelID,
 		Author:    m.Author,
+		Mentions:  m.Mentions,
 	}
 	cmdData := shared.CommandData{
 		Session:     s,
@@ -183,7 +184,7 @@ func (c CommandHandler) DispatchCommand(commandString string, s *discordgo.Sessi
 
 			if len(cmdData.Args) < command.MinArgs || (command.MaxArgs != -1 && len(cmdData.Args) > command.MaxArgs) { // Check if # of arguments is adequate
 				if command.MinArgs == command.MaxArgs {
-					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs) + ".")
+					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+".")
 					return err
 				} else {
 					_, err := s.ChannelMessageSend(m.ChannelID, "Incorrect number of arguments provided to execute command. Required: "+argCountFmt(command.MinArgs)+"-"+argCountFmt(command.MaxArgs)+".")
@@ -661,54 +662,51 @@ func leaveProject(data shared.CommandData) shared.CommandResponse {
 
 // Set project champion(s)
 func setChampions(data shared.CommandData) shared.CommandResponse {
-	users := data.Args[0:]
 	var addedChampions []string
 	success := ""
 	championErrors := make([]string, 0)
-	for _, user := range users {
-		userID := strings.TrimSuffix(strings.TrimPrefix(user, "<@"), ">")
-		if discordUser, err := data.Session.User(userID); err != nil {
-			championErrors = append(championErrors, "Failed to find user "+user+". Try again later.")
+	for _, user := range data.Mentions {
+		if user.Bot {
+			continue
+		}
+		if roles, err := data.Session.GuildRoles(data.Brigade.GuildID); err != nil {
+			fmt.Println("error fetching guild roles,", err)
+			championErrors = append(championErrors, "Failed to get Discord roles to add champion role. Try again later.")
 		} else {
-			if roles, err := data.Session.GuildRoles(data.Brigade.GuildID); err != nil {
-				fmt.Println("error fetching guild roles,", err)
-				championErrors = append(championErrors, "Failed to get Discord roles to add champion role. Try again later.")
-			} else {
-				addedChampions = make([]string, 0)
-				for _, role := range roles {
-					if strings.ToLower(role.Name) == strings.ToLower(data.Project.Name)+"-champion" {
-						if err := data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, discordUser.ID, role.ID); err != nil {
-							fmt.Println("error adding guild role,", err)
-							championErrors = append(championErrors, "Failed to add champion role to <@!"+userID+">. Have an administrator to add it manually.")
-						} else {
-							addedChampions = append(addedChampions, userID)
-						}
+			addedChampions = make([]string, 0)
+			for _, role := range roles {
+				if strings.ToLower(role.Name) == strings.ToLower(data.Project.Name)+"-champion" {
+					if err := data.Session.GuildMemberRoleAdd(data.Brigade.GuildID, user.ID, role.ID); err != nil {
+						fmt.Println("error adding guild role,", err)
+						championErrors = append(championErrors, "Failed to add champion role to <@!"+user.ID+">. Have an administrator to add it manually.")
+					} else {
+						addedChampions = append(addedChampions, user.ID)
 					}
 				}
 			}
-			numberAdded := len(addedChampions)
-			if numberAdded > 0 {
-				success = "Successfully onboarded "
-				for i, userID := range addedChampions {
-					if numberAdded > 2 {
-						if i == numberAdded-1 {
-							success += "and <@!" + userID + ">"
-						} else {
-							success += "<@!" + userID + ">, "
-						}
-					} else if numberAdded > 1 {
-						if i == numberAdded-1 {
-							success += " and <@!" + userID + ">"
-						} else {
-							success += "<@!" + userID + ">"
-						}
+		}
+		numberAdded := len(addedChampions)
+		if numberAdded > 0 {
+			success = "Successfully onboarded "
+			for i, userID := range addedChampions {
+				if numberAdded > 2 {
+					if i == numberAdded-1 {
+						success += "and <@!" + userID + ">"
+					} else {
+						success += "<@!" + userID + ">, "
+					}
+				} else if numberAdded > 1 {
+					if i == numberAdded-1 {
+						success += " and <@!" + userID + ">"
 					} else {
 						success += "<@!" + userID + ">"
 					}
+				} else {
+					success += "<@!" + userID + ">"
 				}
 			}
-			github.AddUserToChampionWaitlist(discordUser.ID, data.Brigade.GithubOrganization, data.Project.Name)
 		}
+		github.AddUserToChampionWaitlist(user.ID, data.Brigade.GithubOrganization, data.Project.Name)
 	}
 	return shared.CommandResponse{
 		ChannelID: data.ChannelID,
@@ -914,8 +912,8 @@ func checkIn(data shared.CommandData) shared.CommandResponse {
 	var duration time.Duration
 	var durationErr error
 	timeStr := strings.Join(data.Args[:len(data.Args)], " ")
-	timeStrDuration := strings.Join(data.Args[:len(data.Args) - 1], " ")
-	if !isTime(timeStr) && isTime(timeStrDuration){ // If all the arguments together aren't a time, we try a duration
+	timeStrDuration := strings.Join(data.Args[:len(data.Args)-1], " ")
+	if !isTime(timeStr) && isTime(timeStrDuration) { // If all the arguments together aren't a time, we try a duration
 		if duration, durationErr = time.ParseDuration(data.Args[len(data.Args)-1]); durationErr == nil {
 			timeStr = timeStrDuration
 		} else {

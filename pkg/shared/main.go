@@ -43,6 +43,7 @@ type CommandResponse struct {
 type MessageData struct {
 	ChannelID string
 	Author    *discordgo.User
+	Mentions  []*discordgo.User
 }
 
 type CommandData struct {
