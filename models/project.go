@@ -12,5 +12,5 @@ type Project struct {
 	GithubDiscordChannelID string `gorm:"not null"`
 	DiscordRoleID string `gorm:"not null"`
 	DiscordChampionRoleID string `gorm:"not null"`
-	GithubRepository string `gorm:"not null"`
+	GithubRepositoryNames string `gorm:"not null"`
 }
